@@ -71,7 +71,7 @@ function autoResizeTextarea(el) {
 
 // 画面の回転や横幅変更で列幅が変わると、必要な高さも変わるため全てのメモ欄を再計算する
 function autoResizeAllMemoTextareas() {
-  document.querySelectorAll('#parts-container .p-memo, #skill-tbody .skill-memo').forEach(autoResizeTextarea);
+  document.querySelectorAll('#parts-container .p-memo, #skill-tbody .skill-memo, #free-memo, #list .miren-madeffect, #memory-list .memory-detail').forEach(autoResizeTextarea);
 }
 window.addEventListener('resize', () => {
   clearTimeout(window.__memoResizeTimer);
@@ -215,7 +215,7 @@ function renderPartsContainer() {
     const secDiv = document.createElement('div');
     secDiv.innerHTML = `
       <div class="part-header">
-        <span>【${sec.title}】</span>
+        <span>【${sec.title}】<span class="part-count" id="part-count-${sec.id}"></span></span>
         <span class="val">基本パーツ / 追加パーツ</span>
       </div>
       <div class="table-scroll">
@@ -258,19 +258,69 @@ function isPartAlreadyExists(partName) {
   return Array.from(document.querySelectorAll('#parts-container .p-name')).some(input => input.value.trim() === partName.trim());
 }
 
-// 「記憶のカケラ」の1枠（テキスト入力＋削除）を作成する
+// 記憶のカケラ1件を {num, name, detail} にそろえる（旧形式の文字列「名前：詳細」も読める）
+function normalizeMemory(m) {
+  if (m && typeof m === 'object') return { num: String(m.num ?? ''), name: String(m.name ?? ''), detail: String(m.detail ?? '') };
+  const s = String(m ?? '');
+  const i = s.search(/[：:]/);
+  if (i > 0 && i <= 20) return { num: '', name: s.slice(0, i).trim(), detail: s.slice(i + 1).trim() };
+  return { num: '', name: s, detail: '' };
+}
+// 記憶のカケラ1件を、読みやすい1行の文字列にする（画像・ココフォリア用）
+function memoryToText(m) {
+  const x = normalizeMemory(m);
+  const head = (x.num ? x.num + ' ' : '') + x.name;
+  return x.detail ? `${head}：${x.detail}` : head;
+}
+
+// 折りたたんでいる間、詳細の書き出し(1行目)を薄く見せる
+function updateMemoryPreview(row) {
+  const pv = row.querySelector('.memory-preview');
+  if (!pv) return;
+  const t = (row.querySelector('.memory-detail')?.value || '').trim();
+  pv.textContent = t;
+  pv.title = t;
+}
+// 記憶のカケラの詳細を折りたたむ/開く（1件ずつ。force=true/falseで指定）
+function toggleMemoryDetail(btn, force) {
+  const row = btn.closest('.memory-entry');
+  if (!row) return;
+  const collapsed = force === undefined ? !row.classList.contains('collapsed') : !!force;
+  row.classList.toggle('collapsed', collapsed);
+  updateMemoryPreview(row);
+  if (!collapsed) autoResizeTextarea(row.querySelector('.memory-detail'));
+}
+// すべて折りたたむ／すべて開く（1つでも開いていれば、すべて折りたたむ）
+function toggleAllMemoryDetails() {
+  const rows = Array.from(document.querySelectorAll('#memory-list .memory-entry'));
+  const anyOpen = rows.some(r => !r.classList.contains('collapsed'));
+  rows.forEach(r => toggleMemoryDetail(r.querySelector('.memory-toggle'), anyOpen));
+  const b = document.getElementById('memory-all-toggle');
+  if (b) b.textContent = anyOpen ? '詳細をすべて開く' : '詳細をすべて折りたたむ';
+}
+
+// 「記憶のカケラ」の1枠（数字・名前・詳細＋削除）を作成する
 function addMemoryEntry(value = '') {
   const container = document.getElementById('memory-list');
   if (!container) return;
+  const m = normalizeMemory(value);
 
   const row = document.createElement('div');
   row.className = 'memory-entry';
-  row.style.cssText = 'display:flex; gap:6px; margin-bottom:6px; align-items:center;';
   row.innerHTML = `
-    <input type="text" class="memory-value" value="${value}" style="flex:1;">
-    <button type="button" class="del edit-only" onclick="removeRowWithUndo(this)" style="padding:6px 10px;">X</button>
+    <div class="memory-head">
+      <input type="text" class="memory-num" value="${escapeHtml(m.num)}" placeholder="数字" inputmode="numeric" aria-label="数字">
+      <button type="button" class="memory-toggle" onclick="toggleMemoryDetail(this)" title="詳細を折りたたむ/開く" aria-label="詳細を折りたたむ/開く"></button>
+      <input type="text" class="memory-name" value="${escapeHtml(m.name)}" placeholder="名前" aria-label="名前">
+      <button type="button" class="del edit-only" onclick="removeRowWithUndo(this)" style="padding:6px 10px;">X</button>
+    </div>
+    <div class="memory-preview" onclick="toggleMemoryDetail(this.closest('.memory-entry').querySelector('.memory-toggle'), false)"></div>
+    <textarea class="memory-detail" rows="1" placeholder="詳細" aria-label="詳細" oninput="autoResizeTextarea(this);updateMemoryPreview(this.closest('.memory-entry'))">${escapeHtml(m.detail)}</textarea>
   `;
   container.appendChild(row);
+  updateMemoryPreview(row);
+  const ta = row.querySelector('.memory-detail');
+  if (ta && typeof autoResizeTextarea === 'function') autoResizeTextarea(ta);
   markDirty();
 }
 
@@ -353,6 +403,11 @@ function onExtraPartSelect(secId, selectElem) {
   }
 
   if (partData) {
+    // データ未登録のパーツは、前に自分で書いた効果があれば入れる
+    if (!partData.memo && partData.name !== '新規パーツ' && typeof getEffectDict === 'function') {
+      const mine = getEffectDict()[effectKeyPart(partData.name)];
+      if (mine && mine.memo) partData = { ...partData, memo: mine.memo, timing: partData.timing || mine.timing, cost: partData.cost || mine.cost, range: partData.range || mine.range };
+    }
     if (partData.name !== '新規パーツ' && isPartAlreadyExists(partData.name)) {
       alert(`「${partData.name}」はすでに配置されています。重複して取得することはできません。`);
       selectElem.value = '';
@@ -377,16 +432,16 @@ function addPartRow(tbody, name, type, level, timing, cost, range, memo, isEdita
     <td class="p-used-cell"><input type="checkbox" class="p-used" onchange="togglePartUsed(this)"></td>
     <td class="color-col"><select class="p-tag" onchange="onManeuverCategoryChange(this)">${buildCategoryOptions(tag)}</select></td>
     <td><select class="p-location" style="padding:2px;font-size:0.75rem;">${locOptions}</select></td>
-    <td><input type="text" value="${name}" class="p-name" ${readOnlyAttr}></td>
+    <td><input type="text" value="${escapeHtml(name)}" class="p-name" ${readOnlyAttr}></td>
     <td>
       <select class="p-type" ${disabledAttr} onchange="calcTotals()">
         ${['基本','武装','変異','改造','たからもの'].map(t => `<option ${type===t?'selected':''}>${t}</option>`).join('')}
       </select>
     </td>
-    <td><input type="number" value="${level}" min="1" max="3" class="p-level" ${disabledAttr} onchange="calcTotals()"></td>
-    <td><input type="text" value="${timing}" class="p-timing" ${readOnlyAttr} oninput="updatePartUsedCheckboxVisibility(this.closest('tr'))"></td>
-    <td><input type="text" value="${cost}" class="p-cost" ${readOnlyAttr}></td>
-    <td><input type="text" value="${range}" class="p-range" ${readOnlyAttr}></td>
+    <td><input type="number" value="${escapeHtml(level)}" min="1" max="3" class="p-level" ${disabledAttr} onchange="calcTotals()"></td>
+    <td><input type="text" value="${escapeHtml(timing)}" class="p-timing" ${readOnlyAttr} oninput="updatePartUsedCheckboxVisibility(this.closest('tr'))"></td>
+    <td><input type="text" value="${escapeHtml(cost)}" class="p-cost" ${readOnlyAttr}></td>
+    <td><input type="text" value="${escapeHtml(range)}" class="p-range" ${readOnlyAttr}></td>
     <td class="col-op"><button type="button" class="del" onclick="removeRowWithUndo(this, calcTotals)">X</button></td>
   `;
   tbody.appendChild(tr);
@@ -399,12 +454,12 @@ function addPartRow(tbody, name, type, level, timing, cost, range, memo, isEdita
   // 押した時だけ入力欄を出す（完全に隠すと後から書き足せなくなるため）
   if (!isEditable && !memoHasContent) {
     memoTr.innerHTML = `<td colspan="11">
-      <button type="button" class="add-memo-btn edit-only" onclick="revealPartMemo(this)">+ 効果メモを追加</button>
+      <button type="button" class="add-memo-btn unregistered edit-only" onclick="revealPartMemo(this)">データ未登録：+ 効果メモを追加</button>
       <textarea class="p-memo" style="display:none;" oninput="onManeuverMemoInput(this, '.p-tag')" onfocus="setTimeout(() => autoResizeTextarea(this), 80)" placeholder="効果メモ"></textarea>
     </td>`;
     tr.classList.add('standalone-row'); // 2段目が畳まれている間は、1段目の下線を通常通り出す
   } else {
-    memoTr.innerHTML = `<td colspan="11"><textarea class="p-memo" ${readOnlyAttr} oninput="onManeuverMemoInput(this, '.p-tag')" onfocus="setTimeout(() => autoResizeTextarea(this), 80)" placeholder="効果メモ">${memo}</textarea></td>`;
+    memoTr.innerHTML = `<td colspan="11"><textarea class="p-memo" ${readOnlyAttr} oninput="onManeuverMemoInput(this, '.p-tag')" onfocus="setTimeout(() => autoResizeTextarea(this), 80)" placeholder="効果メモ">${escapeHtml(memo)}</textarea></td>`;
   }
   tbody.appendChild(memoTr);
 
@@ -444,13 +499,16 @@ function togglePartBreak(checkbox) {
 
 // メモ欄のテキストから「最大行動値+N」の合計を抽出する
 function extractActionBonus(memoText) {
+  // 全角の「＋」「２」や、空白が入った書き方（「最大行動値 ＋ 2」）も読む
+  const text = String(memoText || '')
+    .replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
+    .replace(/[＋﹢]/g, '+');
   let sum = 0;
-  const matches = (memoText || '').match(/最大行動値\+(\d+)/g);
-  if (matches) {
-    matches.forEach(m => {
-      const n = parseInt(m.replace('最大行動値+', ''), 10);
-      if (!isNaN(n)) sum += n;
-    });
+  const re = /最大行動値\s*\+\s*(\d+)/g;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    const n = parseInt(m[1], 10);
+    if (!isNaN(n)) sum += n;
   }
   return sum;
 }
@@ -502,7 +560,7 @@ function updatePartUsedCheckboxVisibility(tr) {
   if (!timingInput || !usedCell || !usedCb) return;
 
   const shouldHide = PART_USED_HIDE_TIMINGS.includes((timingInput.value || '').trim());
-  usedCell.style.visibility = shouldHide ? 'hidden' : 'visible';
+  usedCb.style.visibility = shouldHide ? 'hidden' : 'visible';
   if (shouldHide && usedCb.checked) {
     usedCb.checked = false;
     togglePartUsed(usedCb);
@@ -531,7 +589,27 @@ function resetUsed() {
   calcActionValue();
 }
 
-function resetPartUsedFlags() {
+// 戦闘終了：使用チェックを外し、希望すれば損傷も直す（「元に戻す」で戻せる）
+function endBattle() {
+  if (!confirm('戦闘終了：使用チェックをすべて外します。\nよろしいですか？')) return;
+  const hasBroken = document.querySelector('#parts-container input.p-broken:checked');
+  const repair = hasBroken && confirm('損傷しているパーツも、すべて修復しますか？\n（OK＝修復する／キャンセル＝損傷はそのまま）');
+  resetPartUsedFlags(true);
+  if (repair) {
+    document.querySelectorAll('#parts-container tr input.p-broken').forEach(cb => {
+      cb.checked = false;
+      const tr = cb.closest('tr');
+      tr.classList.remove('broken');
+      if (tr.nextElementSibling && tr.nextElementSibling.classList.contains('part-memo-row')) tr.nextElementSibling.classList.remove('broken');
+    });
+    markDirty();
+    calcActionValue();
+  }
+}
+
+function resetPartUsedFlags(skipConfirm) {
+  // 表示モードには「元に戻す」ボタンが出ないので、押し間違いを防ぐために確認する
+  if (skipConfirm !== true && document.body.classList.contains('view-mode') && !confirm('使用チェックをすべて外します。よろしいですか？')) return;
   pushUndoSnapshot();
   document.querySelectorAll('#parts-container tr input.p-used').forEach(cb => {
     cb.checked = false;
@@ -553,3 +631,86 @@ function resetPartUsedFlags() {
   markDirty();
 }
 
+
+
+// --- 部位ごとの残りパーツ数と、固定バーの行動値・損傷数 ---
+function updatePartCounts() {
+  let allTotal = 0, allBroken = 0;
+  // 固定バーの損傷数：基本パーツ（分類が「基本」）、たからもの（分類が「たからもの」）、強化パーツ（それ以外）に分けて数える
+  const grp = { base: { n: 0, b: 0 }, ext: { n: 0, b: 0 }, tre: { n: 0, b: 0 } };
+  ['head', 'arm', 'body', 'leg'].forEach(id => {
+    const tbody = document.getElementById(`parts-tbody-${id}`);
+    const el = document.getElementById(`part-count-${id}`);
+    if (!tbody || !el) return;
+    const rows = tbody.querySelectorAll('tr.part-row');
+    const broken = Array.from(rows).filter(tr => tr.querySelector('.p-broken')?.checked).length;
+    const alive = rows.length - broken;
+    allTotal += rows.length; allBroken += broken;
+    rows.forEach(tr => {
+      const ty = tr.querySelector('.p-type')?.value;
+      const g = ty === '基本' ? grp.base : (ty === 'たからもの' ? grp.tre : grp.ext);
+      g.n++;
+      if (tr.querySelector('.p-broken')?.checked) g.b++;
+    });
+    el.textContent = `残り ${alive}/${rows.length}`;
+    el.classList.toggle('low', rows.length > 0 && alive === 0);
+  });
+  const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+  set('bar-broken-base', grp.base.b); set('bar-parts-base', grp.base.n);
+  set('bar-broken-ext', grp.ext.b); set('bar-parts-ext', grp.ext.n);
+  set('bar-broken-tre', grp.tre.b); set('bar-parts-tre', grp.tre.n);
+  set('bar-act', document.getElementById('act')?.value || '0');
+}
+
+(function () {
+  // 最大行動値を計算し直したとき（損傷・パーツ追加など）に、一緒に更新する
+  const baseCalc = calcActionValue;
+  calcActionValue = function () {
+    const r = baseCalc.apply(this, arguments);
+    updatePartCounts();
+    return r;
+  };
+  let timer = null;
+  const schedule = () => { clearTimeout(timer); timer = setTimeout(updatePartCounts, 30); };
+  document.addEventListener('change', schedule);
+  document.addEventListener('DOMContentLoaded', () => {
+    const c = document.getElementById('parts-container');
+    if (c) new MutationObserver(schedule).observe(c, { childList: true, subtree: true });
+    schedule();
+  });
+})();
+
+
+// 自由メモの折りたたみ
+function toggleFreeMemo(force) {
+  const body = document.getElementById('free-memo-body');
+  if (!body) return;
+  const fold = (typeof force === 'boolean') ? force : body.style.display !== 'none';
+  body.style.display = fold ? 'none' : '';
+  const chev = document.getElementById('free-memo-chev');
+  if (chev) chev.textContent = fold ? '▸' : '▾';
+  const pv = document.getElementById('free-memo-preview');
+  if (pv) {
+    const t = (document.getElementById('free-memo').value || '').replace(/\s+/g, ' ').trim();
+    pv.textContent = fold && t ? '— ' + (t.length > 24 ? t.slice(0, 24) + '…' : t) : '';
+  }
+  try { localStorage.setItem('necro_memo_fold', fold ? '1' : '0'); } catch (e) {}
+}
+window.addEventListener('load', () => { try { if (localStorage.getItem('necro_memo_fold') === '1') toggleFreeMemo(true); } catch (e) {} });
+
+// 「たからもの」に設定したマニューバの名前を覚えておく（保管所テキストの取り込みで、data.jsに無くても「たからもの」にするため）
+function getKnownTreasureNames() {
+  try { const a = JSON.parse(localStorage.getItem('necro_treasure_names') || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; }
+}
+document.addEventListener('change', e => {
+  const sel = e.target;
+  if (!sel || !sel.matches || !sel.matches('.p-type')) return;
+  const tr = sel.closest('tr');
+  const name = (tr?.querySelector('.p-name')?.value || '').trim();
+  if (!name) return;
+  try {
+    const set = new Set(getKnownTreasureNames());
+    if (sel.value === 'たからもの') set.add(name); else set.delete(name);
+    localStorage.setItem('necro_treasure_names', JSON.stringify([...set].slice(-200)));
+  } catch (err) {}
+});

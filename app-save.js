@@ -8,6 +8,12 @@ function getFullData() {
     mc: getVal('mc'),
     sc: getVal('sc'),
     age: getVal('age'),
+    height: getVal('height'),
+    weight: getVal('weight'),
+    hair: getVal('hair'),
+    eye: getVal('eye'),
+    skin: getVal('skin'),
+    freeMemo: getVal('free-memo'),
     ps: getVal('ps'),
     hint: getVal('hint'),
     act: getVal('act'),
@@ -75,18 +81,25 @@ function getFullData() {
   });
 
   // 記憶のカケラ（複数）
-  document.querySelectorAll('#memory-list .memory-value').forEach(input => {
-    data.memories.push(input.value || '');
+  document.querySelectorAll('#memory-list .memory-entry').forEach(row => {
+    data.memories.push({
+      num: row.querySelector('.memory-num')?.value || '',
+      name: row.querySelector('.memory-name')?.value || '',
+      detail: row.querySelector('.memory-detail')?.value || ''
+    });
   });
 
   // 未練
-  document.querySelectorAll('#list tr').forEach(tr => {
+  document.querySelectorAll('#list tr.miren-row').forEach(tr => {
     const inputs = tr.querySelectorAll('input');
     if (inputs.length >= 3) {
+      const mad = tr.nextElementSibling && tr.nextElementSibling.classList.contains('miren-mad-row') ? tr.nextElementSibling : null;
       data.list.push({
         target: inputs[0].value,
         emotion: inputs[1].value,
-        madness: inputs[2].value
+        madness: inputs[2].value,
+        madName: mad ? (mad.querySelector('.miren-madname')?.value || '') : '',
+        madEffect: mad ? (mad.querySelector('.miren-madeffect')?.value || '') : ''
       });
     }
   });
@@ -123,11 +136,104 @@ function getSavedSheets() {
   }
 }
 
-function setSavedSheets(sheets) {
-  localStorage.setItem(SHEETS_KEY, JSON.stringify(sheets));
+// ブラウザの保存領域はおよそ5MBで、いっぱいになると書き込みに失敗する。
+// 成功したら true、失敗したら false を返す（silent のときは、失敗しても画面に出さない）。
+// 失敗したら、まず「削除したキャラのゴミ箱」を空にしてもう一度試す
+const STORAGE_LIMIT_CHARS = 5000000; // 目安（ブラウザによって違う）
+const STORAGE_FULL_MESSAGE = 'ブラウザの保存領域がいっぱいで、保存できませんでした。\n「全キャラをバックアップ」で書き出してから、使わないキャラクターを削除してください。（画像を設定したキャラは容量が大きくなります）';
+
+function getStorageUsageRatio() {
+  try {
+    let total = 0;
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      total += k.length + (localStorage.getItem(k) || '').length;
+    }
+    return total / STORAGE_LIMIT_CHARS;
+  } catch (e) { return 0; }
+}
+
+function setSavedSheets(sheets, silent) {
+  const json = JSON.stringify(sheets);
+  try {
+    localStorage.setItem(SHEETS_KEY, json);
+    return true;
+  } catch (e) {
+    try {
+      localStorage.removeItem(TRASH_KEY);
+      localStorage.setItem(SHEETS_KEY, json);
+      if (!silent) alert('保存領域がいっぱいだったため、削除したキャラのゴミ箱を空にして保存しました。\n（削除したキャラの復元はできなくなりました）');
+      return true;
+    } catch (e2) {
+      if (!silent) alert(STORAGE_FULL_MESSAGE);
+      return false;
+    }
+  }
+}
+
+// ==========================================================
+// 削除したキャラクターのゴミ箱（復元用、直近5件まで）
+// バックアップファイルには含めない。localStorage の別キー 'necro_trash' を使う
+// ==========================================================
+const TRASH_KEY = 'necro_trash';
+const TRASH_LIMIT = 5;
+
+function getTrash() {
+  try {
+    const trash = JSON.parse(localStorage.getItem(TRASH_KEY) || '[]');
+    return Array.isArray(trash) ? trash : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function setTrash(trash) {
+  try {
+    localStorage.setItem(TRASH_KEY, JSON.stringify(trash));
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+// 削除対象のエントリ全体をゴミ箱の先頭に入れる（直近5件まで残す）
+function moveToTrash(id, entry) {
+  const trash = getTrash();
+  trash.unshift({
+    name: entry.name || '(無名)',
+    pl: entry.pl || '',
+    savedAt: entry.savedAt || '',
+    image: entry.image || null,
+    data: entry.data,
+    deletedAt: new Date().toISOString(),
+    originalId: id
+  });
+  return setTrash(trash.slice(0, TRASH_LIMIT));
+}
+
+// ゴミ箱の最新1件を、新しい id で保存済み一覧に復元する（同名があっても上書きしない）
+function restoreDeletedSave() {
+  const trash = getTrash();
+  if (trash.length === 0) return alert('復元できる削除済みキャラクターはありません');
+
+  const entry = trash[0];
+  const sheets = getSavedSheets();
+  const newId = 'char_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+  sheets[newId] = {
+    name: entry.name || '(無名)',
+    pl: entry.pl || '',
+    savedAt: entry.savedAt || new Date().toISOString(),
+    image: entry.image || null,
+    data: JSON.parse(JSON.stringify(entry.data || {}))
+  };
+  if (!setSavedSheets(sheets)) return;
+  setTrash(trash.slice(1));
+  refreshSaveSlotOptions(newId);
+  alert(`「${entry.name || '(無名)'}」を復元しました`);
 }
 
 function refreshSaveSlotOptions(selectedId = '') {
+  if (typeof updateBackupReminder === 'function') setTimeout(updateBackupReminder, 0);
   const select = document.getElementById('save-slot');
   if (!select) return;
   const sheets = getSavedSheets();
@@ -159,7 +265,7 @@ function migrateOldSingleSave() {
       savedAt: new Date().toISOString(),
       data: oldData
     };
-    setSavedSheets(sheets);
+    setSavedSheets(sheets, true);
   } catch (e) {
     // 変換に失敗した場合は何もしない
   }
@@ -204,10 +310,11 @@ function saveData() {
     delete sheets['autosave_draft'];
   }
 
-  setSavedSheets(sheets);
+  if (!setSavedSheets(sheets)) return; // 失敗したときは、保存したと表示しない（isDirty も、そのまま）
   isDirty = false;
   refreshSaveSlotOptions(id);
-  alert('ブラウザに保存しました');
+  const usage = getStorageUsageRatio();
+  alert('ブラウザに保存しました' + (usage >= 0.8 ? `\n\n※保存領域の約${Math.round(usage * 100)}%を使っています。いっぱいになる前に、「全キャラをバックアップ」で書き出しておくのがおすすめです。` : ''));
 }
 
 function loadData() {
@@ -234,12 +341,22 @@ function deleteSelectedSave() {
   const entry = sheets[id];
   if (!entry) return;
 
-  if (!confirm(`「${entry.name}」を削除します。この操作は取り消せません。よろしいですか？`)) return;
+  if (!confirm(`「${entry.name}」を削除します。よろしいですか？\n\n削除したキャラクターは「削除したキャラを復元」ボタンから復元できます（直近5件まで）。`)) return;
 
+  if (id === 'autosave_draft') {
+    // 自動保存の下書きはゴミ箱に入れず、そのまま削除する（下書きは「保存」ボタンで確定したものではないため）
+    delete sheets[id];
+    setSavedSheets(sheets);
+    refreshSaveSlotOptions('');
+    alert('下書きを削除しました');
+    return;
+  }
+
+  if (!moveToTrash(id, entry) && !confirm('保存領域がいっぱいで、ゴミ箱に入れられません。このまま削除すると、元に戻せません。それでも削除しますか？')) return;
   delete sheets[id];
-  setSavedSheets(sheets);
+  if (!setSavedSheets(sheets)) return;
   refreshSaveSlotOptions('');
-  alert('削除しました');
+  alert(`「${entry.name}」を削除しました。\n「削除したキャラを復元」ボタンから復元できます。`);
 }
 
 // ==========================================================
@@ -257,7 +374,8 @@ function exportAllCharactersBackup() {
     type: 'necronica_backup',
     version: 1,
     exportedAt: new Date().toISOString(),
-    sheets: sheets
+    sheets: sheets,
+    effectDict: (typeof getEffectDict === 'function') ? getEffectDict() : {}
   };
 
   const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
@@ -268,8 +386,30 @@ function exportAllCharactersBackup() {
   a.download = `necronica_backup_${dateStr}.json`;
   a.click();
   URL.revokeObjectURL(url);
+  try { localStorage.setItem('necro_last_backup', String(Date.now())); } catch (e) {}
+  updateBackupReminder();
 
   alert(`${ids.length}件のキャラクターをバックアップファイルとして書き出しました`);
+}
+
+// 最後にバックアップを取ってからの日数を表示する（未バックアップ・14日以上は注意色）
+function updateBackupReminder() {
+  const el = document.getElementById('backup-reminder');
+  if (!el) return;
+  const n = Object.keys(getSavedSheets()).length;
+  if (n === 0) { el.style.display = 'none'; return; }
+  let last = 0;
+  try { last = parseInt(localStorage.getItem('necro_last_backup') || '0', 10) || 0; } catch (e) {}
+  let msg, warn;
+  if (!last) { msg = 'バックアップはまだ取っていません'; warn = true; }
+  else {
+    const days = Math.floor((Date.now() - last) / 86400000);
+    msg = days <= 0 ? '最後のバックアップ：今日' : `最後のバックアップ：${days}日前`;
+    warn = days >= 14;
+  }
+  el.style.display = '';
+  el.style.color = warn ? '#ffcf70' : '#9a9';
+  el.innerHTML = `${warn ? '⚠ ' : ''}${msg} <button type="button" class="char-switch-btn" style="margin-left:6px;" onclick="exportAllCharactersBackup()">バックアップを取る</button>`;
 }
 
 function onBackupFileSelected(event) {
@@ -315,7 +455,8 @@ function onBackupFileSelected(event) {
         };
       });
 
-      setSavedSheets(sheets);
+      if (!setSavedSheets(sheets)) return;
+      if (backup && backup.effectDict && typeof mergeEffectDict === 'function') mergeEffectDict(backup.effectDict);
       refreshSaveSlotOptions();
       alert(`${importIds.length}件のキャラクターを読み込みました`);
     } catch (err) {
@@ -329,12 +470,46 @@ function onBackupFileSelected(event) {
   event.target.value = '';
 }
 
+// ==========================================================
+// 新規作成（白紙に戻す）
+// ==========================================================
+let BLANK_SHEET_DATA = null;
+
+// ページを開いた直後の、何も入力していない状態を覚えておく（記憶のカケラ枠は2個）
+function captureBlankSheet() {
+  try {
+    BLANK_SHEET_DATA = JSON.parse(JSON.stringify(getFullData()));
+    BLANK_SHEET_DATA.memories = [{ num: '', name: '', detail: '' }, { num: '', name: '', detail: '' }];
+  } catch (e) {
+    BLANK_SHEET_DATA = null;
+  }
+}
+
+// 今の入力を白紙に戻す。保存済みのキャラは消さず、選択も外す（次に「保存」すると新しいキャラとして保存される）
+function newBlankSheet() {
+  if (!BLANK_SHEET_DATA) return alert('白紙の状態を用意できませんでした。ページを開き直してください');
+  if (!confirm('今の入力をすべて消して、白紙に戻します。\n保存済みのキャラクターは消えません（「↩️ 元に戻す」で、今の入力は戻せます）。\n\nよろしいですか？')) return;
+  pushUndoSnapshot();
+  applyData(JSON.parse(JSON.stringify(BLANK_SHEET_DATA)));
+  const select = document.getElementById('save-slot');
+  if (select) select.value = '';
+  if (typeof renderSaveCards === 'function') renderSaveCards('');
+  if (typeof updateSelectedActionsVisibility === 'function') updateSelectedActionsVisibility('');
+  if (typeof updateViewModeImage === 'function') updateViewModeImage('');
+  isDirty = false;
+  if (typeof autoResizeAllMemoTextareas === 'function') setTimeout(autoResizeAllMemoTextareas, 50);
+}
+
 function applyData(data) {
   const setVal = (id, val) => { if(document.getElementById(id)) document.getElementById(id).value = val || ''; };
 
   setVal('pl', data.pl); setVal('name', data.name);
   setVal('pos', data.pos || 'アリス'); setVal('mc', data.mc || 'ロマネスク'); setVal('sc', data.sc || 'ロマネスク');
   setVal('age', data.age); setVal('ps', data.ps || '煉獄');
+  setVal('height', data.height); setVal('weight', data.weight);
+  setVal('hair', data.hair); setVal('eye', data.eye); setVal('skin', data.skin);
+  setVal('free-memo', data.freeMemo);
+  autoResizeTextarea(document.getElementById('free-memo'));
   setVal('hint', data.hint);
   setVal('act', data.act || '9'); setVal('fav', data.fav || '0');
   setVal('chouai-wep', data.chouaiWep || '0'); setVal('chouai-mut', data.chouaiMut || '0'); setVal('chouai-cyb', data.chouaiCyb || '0');
@@ -411,7 +586,7 @@ function applyData(data) {
   if (listTbody) {
     listTbody.innerHTML = '';
     if (data.list) {
-      data.list.forEach(l => addRow(l.target, l.emotion, l.madness));
+      data.list.forEach(l => addRow(l.target, l.emotion, l.madness, l.madName || '', l.madEffect || ''));
     }
   }
 

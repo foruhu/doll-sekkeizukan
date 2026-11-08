@@ -103,17 +103,59 @@ function calcTotals() {
   if (typeof calcActionValue === 'function') calcActionValue();
 }
 
-function addRow(target = '', emotion = '', madness = 0) {
+// 狂気点は 0〜4。4/4 になったら赤くして、発狂が近い（到達した）ことが分かるようにする
+function updateMadnessFull(input) {
+  const v = parseInt(input.value, 10) || 0;
+  const wrap = input.closest('.mad-pt');
+  if (wrap) wrap.classList.toggle('full', v >= 4);
+}
+function stepMadness(btn, d) {
+  const input = btn.closest('.mad-pt').querySelector('.mad-input');
+  const v = Math.max(0, Math.min(4, (parseInt(input.value, 10) || 0) + d));
+  if (String(v) === input.value) return;
+  if (typeof pushUndoSnapshot === 'function') pushUndoSnapshot();
+  input.value = v;
+  updateMadnessFull(input);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+// 未練の1件は2行で表す：1行目＝対象・未練・狂気点、2行目＝発狂（発狂時の名前と効果）
+function addRow(target = '', emotion = '', madness = 0, madName = '', madEffect = '') {
   const tbody = document.getElementById('list');
   if (!tbody) return;
   const tr = document.createElement('tr');
+  tr.className = 'miren-row';
   tr.innerHTML = `
-    <td><input type="text" value="${target}"></td>
-    <td><input type="text" value="${emotion}"></td>
-    <td><input type="number" value="${madness}" min="0"></td>
+    <td><input type="text" value="${escapeHtml(target)}"></td>
+    <td><input type="text" value="${escapeHtml(emotion)}"></td>
+    <td>
+      <div class="mad-pt">
+        <button type="button" class="mad-step edit-only" onclick="stepMadness(this, -1)" aria-label="狂気点を1減らす">−</button>
+        <input type="number" class="mad-input" value="${Math.max(0, Math.min(4, parseInt(madness, 10) || 0))}" min="0" max="4" inputmode="numeric" oninput="updateMadnessFull(this)">
+        <span class="mad-max">/4</span>
+        <button type="button" class="mad-step edit-only" onclick="stepMadness(this, 1)" aria-label="狂気点を1増やす">＋</button>
+      </div>
+    </td>
     <td class="col-op"><button type="button" class="del" onclick="removeRowWithUndo(this)">X</button></td>
   `;
+  const mad = document.createElement('tr');
+  mad.className = 'miren-mad-row';
+  mad.innerHTML = `
+    <td colspan="4">
+      <div class="miren-mad-box">
+        <span class="miren-mad-label">発狂</span>
+        <input type="text" class="miren-madname" value="${escapeHtml(madName)}" placeholder="発狂名（例: 幼児退行）">
+        <textarea class="miren-madeffect" rows="1" placeholder="発狂時の効果" oninput="autoResizeTextarea(this)" onfocus="setTimeout(() => autoResizeTextarea(this), 80)">${escapeHtml(madEffect)}</textarea>
+      </div>
+    </td>
+  `;
   tbody.appendChild(tr);
+  tbody.appendChild(mad);
+  updateMadnessFull(tr.querySelector('.mad-input'));
+  const sync = () => mad.classList.toggle('empty', !mad.querySelector('.miren-madname').value.trim() && !mad.querySelector('.miren-madeffect').value.trim());
+  mad.addEventListener('input', sync);
+  sync();
+  if (typeof autoResizeTextarea === 'function') autoResizeTextarea(mad.querySelector('.miren-madeffect'));
   markDirty();
 }
 
@@ -135,8 +177,14 @@ function updateSkillOptions() {
         optionsHtml += `<option value="${s.name}" ${s.name === currentValue ? 'selected' : ''} ${disabledAttr}>${labelText}</option>`;
       });
     }
+    // スキル一覧に無い名前（保管所テキストの読み込みなど）が入っている場合も、選択肢として残して値が消えないようにする
+    const inDb = !!(typeof SKILL_DATABASE !== 'undefined' && SKILL_DATABASE[category] && SKILL_DATABASE[category].some(s => s.name === currentValue));
+    if (currentValue && !inDb) {
+      optionsHtml += `<option value="${escapeHtml(currentValue)}" selected>${escapeHtml(currentValue)}</option>`;
+    }
     select.innerHTML = optionsHtml;
   });
+  if (typeof refreshUnregisteredHints === 'function') refreshUnregisteredHints();
 }
 
 // スキルDBのメモ文字列「【名前】 タイミング/コスト/射程\n効果...」をタイミング・コスト・射程・効果本文に分解する
@@ -165,7 +213,7 @@ function buildTimingOptionsHtml(selected) {
   const options = SKILL_TIMING_OPTIONS.includes(selected) || !selected
     ? SKILL_TIMING_OPTIONS
     : [...SKILL_TIMING_OPTIONS, selected]; // 未知の値は選択肢の最後に追加して保持する
-  return options.map(t => `<option value="${t}" ${t === selected ? 'selected' : ''}>${t || '（未選択）'}</option>`).join('');
+  return options.map(t => `<option value="${escapeHtml(t)}" ${t === selected ? 'selected' : ''}>${escapeHtml(t) || '（未選択）'}</option>`).join('');
 }
 
 // 既存のselectに無い値をセットしたい時、その場で選択肢へ追加してから値を反映する
@@ -189,7 +237,7 @@ function updateSkillUsedCheckboxVisibility(tr) {
   if (!timingInput || !usedCell || !usedCb) return;
 
   const shouldShow = SKILL_USED_CHECK_TIMINGS.includes((timingInput.value || '').trim());
-  usedCell.style.visibility = shouldShow ? 'visible' : 'hidden';
+  usedCb.style.visibility = shouldShow ? 'visible' : 'hidden';
   if (!shouldShow && usedCb.checked) {
     usedCb.checked = false;
     toggleSkillUsed(usedCb);
@@ -216,15 +264,15 @@ function addSkillRow(category, skillName = '', timing = '', cost = '', range = '
     <td class="color-col"><select class="skill-tag" onchange="onManeuverCategoryChange(this)">${buildCategoryOptions(tag)}</select></td>
     <td><select class="skill-name-select" onchange="onSkillSelect(this)"><option value="">-- スキルを選択 --</option></select></td>
     <td><select class="skill-timing" onchange="updateSkillUsedCheckboxVisibility(this.closest('tr'))">${buildTimingOptionsHtml(timing)}</select></td>
-    <td><input type="text" class="skill-cost" value="${cost}"></td>
-    <td><input type="text" class="skill-range" value="${range}"></td>
+    <td><input type="text" class="skill-cost" value="${escapeHtml(cost)}"></td>
+    <td><input type="text" class="skill-range" value="${escapeHtml(range)}"></td>
     <td class="col-op"><button type="button" class="del" onclick="removeRowWithUndo(this, () => { calcTotals(); updateSkillOptions(); })">X</button></td>
   `;
   tbody.appendChild(tr);
 
   const memoTr = document.createElement('tr');
   memoTr.className = 'skill-memo-row';
-  memoTr.innerHTML = `<td colspan="8"><textarea class="skill-memo" oninput="onManeuverMemoInput(this, '.skill-tag')" onfocus="setTimeout(() => autoResizeTextarea(this), 80)" placeholder="効果メモ">${memo}</textarea></td>`;
+  memoTr.innerHTML = `<td colspan="8"><textarea class="skill-memo" oninput="onManeuverMemoInput(this, '.skill-tag')" onfocus="setTimeout(() => autoResizeTextarea(this), 80)" placeholder="効果メモ">${escapeHtml(memo)}</textarea></td>`;
   tbody.appendChild(memoTr);
 
   applyCategoryColorToRow(tr, tag);
@@ -239,7 +287,16 @@ function addSkillRow(category, skillName = '', timing = '', cost = '', range = '
 
   // 選択肢一覧を先に生成してから値をセットする（順序を逆にすると保存データの選択状態が復元されない）
   updateSkillOptions();
-  if (skillName) tr.querySelector('.skill-name-select').value = skillName;
+  if (skillName) {
+    const nameSelect = tr.querySelector('.skill-name-select');
+    if (!Array.from(nameSelect.options).some(o => o.value === skillName)) {
+      const opt = document.createElement('option');
+      opt.value = skillName;
+      opt.textContent = skillName;
+      nameSelect.appendChild(opt);
+    }
+    nameSelect.value = skillName;
+  }
   markDirty();
   calcTotals();
 }
@@ -273,6 +330,11 @@ function onSkillSelect(selectElem) {
     const found = SKILL_DATABASE[category].find(s => s.name === skillName);
     if (found) {
       const parsed = parseSkillMemo(found.memo);
+      // データ未登録のスキルは、前に自分で書いた効果があれば入れる
+      if (!found.memo && typeof getEffectDict === 'function') {
+        const mine = getEffectDict()[effectKeySkill(category, skillName)];
+        if (mine && mine.memo) { parsed.timing = mine.timing || ''; parsed.cost = mine.cost || ''; parsed.range = mine.range || ''; parsed.effect = mine.memo; }
+      }
       if (timingInput) setTimingSelectValue(timingInput, parsed.timing);
       if (costInput) costInput.value = parsed.cost;
       if (rangeInput) rangeInput.value = parsed.range;
@@ -299,7 +361,7 @@ function addSessionHistoryRow(scenario = '', battle = 0, personal = 0, memo = ''
   const tr = document.createElement('tr');
   tr.innerHTML = `
     <td style="padding: 4px; border: 1px solid #444;">
-      <input type="text" class="h-scenario" value="${scenario}" placeholder="例: 狂い咲く薔薇" style="width: 95%; background: #1a1a20; color: #fff; border: 1px solid #555; padding: 4px; border-radius: 3px;">
+      <input type="text" class="h-scenario" value="${escapeHtml(scenario)}" placeholder="例: 狂い咲く薔薇" style="width: 95%; background: #1a1a20; color: #fff; border: 1px solid #555; padding: 4px; border-radius: 3px;">
     </td>
     <td style="padding: 4px; border: 1px solid #444;">
       <input type="number" class="battle-pts" value="${battle}" min="0" oninput="calcChouaiTotals()" style="width: 75%; background: #1a1a20; color: #8ff; border: 1px solid #555; padding: 4px; text-align: center; font-weight: bold; border-radius: 3px;"> pt
@@ -308,7 +370,7 @@ function addSessionHistoryRow(scenario = '', battle = 0, personal = 0, memo = ''
       <input type="number" class="personal-pts" value="${personal}" min="0" oninput="calcChouaiTotals()" style="width: 75%; background: #1a1a20; color: #8ff; border: 1px solid #555; padding: 4px; text-align: center; font-weight: bold; border-radius: 3px;"> pt
     </td>
     <td style="padding: 4px; border: 1px solid #444;">
-      <input type="text" class="h-memo" value="${memo}" placeholder="例: 2026/05/10 通過" style="width: 95%; background: #1a1a20; color: #fff; border: 1px solid #555; padding: 4px; border-radius: 3px;">
+      <input type="text" class="h-memo" value="${escapeHtml(memo)}" placeholder="例: 2026/05/10 通過" style="width: 95%; background: #1a1a20; color: #fff; border: 1px solid #555; padding: 4px; border-radius: 3px;">
     </td>
     <td class="col-op" style="padding: 4px; border: 1px solid #444; text-align: center;">
       <button type="button" class="edit-only" onclick="removeRowWithUndo(this, calcChouaiTotals)" style="background: #ff4444; color: white; border: none; padding: 2px 6px; border-radius: 3px; cursor: pointer;">X</button>
@@ -383,3 +445,21 @@ function calcChouaiTotals() {
 }
 
 // --- 保存・読込 ---
+
+
+// スキル一覧にあるのに効果データが入っていないスキルは、効果メモ欄に「データ未登録」と出す（ルール上の空欄ではないと分かるように）
+function refreshUnregisteredHints() {
+  document.querySelectorAll('#skill-tbody tr:not(.skill-memo-row)').forEach(tr => {
+    const memoTr = tr.nextElementSibling && tr.nextElementSibling.classList.contains('skill-memo-row') ? tr.nextElementSibling : null;
+    const ta = memoTr ? memoTr.querySelector('.skill-memo') : null;
+    if (!ta) return;
+    const name = tr.querySelector('.skill-name-select')?.value || '';
+    const category = tr.querySelector('.skill-category')?.value || '';
+    let unregistered = false;
+    if (name && typeof SKILL_DATABASE !== 'undefined' && SKILL_DATABASE[category]) {
+      const found = SKILL_DATABASE[category].find(s => s.name === name);
+      unregistered = !!found && !found.memo;
+    }
+    ta.placeholder = unregistered ? 'データ未登録（ルルブを見て、手入力できます）' : '効果メモ';
+  });
+}

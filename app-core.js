@@ -45,7 +45,7 @@ function removeRowWithUndo(button, afterFn) {
   if (el) {
     // パーツ／スキルの本体行を消す場合は、直後の効果メモ行も一緒に消す
     const nextEl = el.nextElementSibling;
-    if (nextEl && (nextEl.classList.contains('part-memo-row') || nextEl.classList.contains('skill-memo-row'))) {
+    if (nextEl && (nextEl.classList.contains('part-memo-row') || nextEl.classList.contains('skill-memo-row') || nextEl.classList.contains('miren-mad-row'))) {
       nextEl.remove();
     }
     el.remove();
@@ -89,36 +89,42 @@ function updateAutosaveStatusText(text) {
 function startAutosaveTimer() {
   if (autosaveTimer) clearInterval(autosaveTimer);
   autosaveTimer = setInterval(() => {
-    if (!isDirty) return;
+    if (!isDirty || document.body.classList.contains('view-locked')) return;
     performAutosave();
   }, AUTOSAVE_INTERVAL_MS);
 }
 
-// 未保存の変更を静かに自動保存する（選択中のキャラがあればそこへ上書き、無ければ専用の下書き枠へ）
+// 未保存の変更を下書き枠にだけ自動保存する。
+// 選択中のキャラクターへは上書きしない。「💾 保存」を押すまで、選択中のキャラの保存内容は変わらない。
+// 下書きには元になったキャラの id と名前を残す（draftOf / draftOfName）。
+// 下書き保存だけでは「保存」したことにならないが、閉じる前の警告が毎回出て煩わしくならないよう、
+// 下書きへ保存できたら isDirty は false にする。その代わり、状態表示で「下書き」であることを明示する。
 function performAutosave() {
   try {
     const data = getFullData();
     const select = document.getElementById('save-slot');
     const sheets = getSavedSheets();
-    let id = select ? select.value : '';
+    const selectedId = select ? select.value : '';
+    const selectedEntry = selectedId ? sheets[selectedId] : null;
+    const id = 'autosave_draft';
+    const existingImage = sheets[id] ? sheets[id].image : null;
+    sheets[id] = {
+      name: '（自動保存）' + (data.name || '下書き'),
+      pl: data.pl || '',
+      savedAt: new Date().toISOString(),
+      image: existingImage,
+      draftOf: selectedId || '',
+      draftOfName: selectedEntry ? (selectedEntry.name || '') : '',
+      data: data
+    };
 
-    if (id && sheets[id]) {
-      sheets[id] = { ...sheets[id], pl: data.pl || '', savedAt: new Date().toISOString(), data };
-    } else {
-      id = 'autosave_draft';
-      const existingImage = sheets[id] ? sheets[id].image : null;
-      sheets[id] = {
-        name: '（自動保存）' + (data.name || '下書き'),
-        pl: data.pl || '',
-        savedAt: new Date().toISOString(),
-        image: existingImage,
-        data: data
-      };
+    if (!setSavedSheets(sheets, true)) {
+      // 保存領域がいっぱい。画面は静かに、でも上のバーで分かるようにする（isDirty は残し、次の機会に再試行する）
+      updateAutosaveStatusText('⚠ 自動保存できません（保存領域がいっぱいです）');
+      return;
     }
-
-    setSavedSheets(sheets);
     isDirty = false;
-    updateAutosaveStatusText('自動保存 ' + formatTimeHM(new Date()));
+    updateAutosaveStatusText('自動保存（下書き） ' + formatTimeHM(new Date()));
     renderSaveCards(select ? select.value : '');
   } catch (e) {
     // 自動保存の失敗はアラートを出さず静かに諦める（次のタイミングで再試行される）
@@ -167,6 +173,7 @@ function updateViewModeImage(selectedId) {
 }
 
 function renderSaveCards(selectedId = '') {
+  try { if (selectedIdForMemo(arguments[0]) && arguments[0]) localStorage.setItem('necro_last_slot', arguments[0]); } catch (e) {}
   const container = document.getElementById('save-cards');
   if (!container) return;
 
@@ -187,7 +194,9 @@ function renderSaveCards(selectedId = '') {
     const thumbHtml = s.image
       ? `<img src="${s.image}" class="save-card-thumb" alt="">`
       : `<div class="save-card-thumb save-card-thumb-placeholder">🧍</div>`;
-    const sub = [s.data && s.data.pos, s.data && s.data.mc, s.data && s.data.sc].filter(Boolean).join(' / ');
+    const sub = (id === 'autosave_draft' && s.draftOfName)
+      ? '元: ' + s.draftOfName
+      : [s.data && s.data.pos, s.data && s.data.mc, s.data && s.data.sc].filter(Boolean).join(' / ');
     return `
       <div class="save-card ${isSelected ? 'selected' : ''}" onclick="selectSaveCard('${id}')" data-id="${id}">
         ${thumbHtml}
@@ -218,6 +227,20 @@ function closeCharSwitcher() {
   if (overlay) overlay.style.display = 'none';
 }
 
+// README（使い方）画面の開閉
+function openHelp() {
+  const overlay = document.getElementById('help-overlay');
+  if (overlay) {
+    overlay.style.display = 'block';
+    overlay.scrollTop = 0;
+  }
+}
+
+function closeHelp() {
+  const overlay = document.getElementById('help-overlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
 function renderCharSwitcherCards() {
   const container = document.getElementById('char-switch-cards');
   if (!container) return;
@@ -238,7 +261,9 @@ function renderCharSwitcherCards() {
     const thumbHtml = s.image
       ? `<img src="${s.image}" class="save-card-thumb" alt="">`
       : `<div class="save-card-thumb save-card-thumb-placeholder">🧍</div>`;
-    const sub = [s.data && s.data.pos, s.data && s.data.mc, s.data && s.data.sc].filter(Boolean).join(' / ');
+    const sub = (id === 'autosave_draft' && s.draftOfName)
+      ? '元: ' + s.draftOfName
+      : [s.data && s.data.pos, s.data && s.data.mc, s.data && s.data.sc].filter(Boolean).join(' / ');
     return `
       <div class="save-card ${isCurrent ? 'selected' : ''}" onclick="quickSwitchToCharacter('${id}')">
         ${thumbHtml}
@@ -292,7 +317,7 @@ function duplicateSelectedSave() {
     data: JSON.parse(JSON.stringify(entry.data))
   };
 
-  setSavedSheets(sheets);
+  if (!setSavedSheets(sheets)) return;
   refreshSaveSlotOptions(newId);
   alert(`「${newName || defaultName}」として複製しました`);
 }
@@ -344,7 +369,7 @@ function onThumbFileSelected(event) {
     const sheets = getSavedSheets();
     if (!sheets[id]) return;
     sheets[id].image = dataUrl;
-    setSavedSheets(sheets);
+    if (!setSavedSheets(sheets)) return;
     renderSaveCards(id);
     alert('サムネイル画像を設定しました');
   }).catch(err => {
@@ -372,8 +397,35 @@ function clearSelectedThumbnail() {
   if (!confirm('サムネイル画像を削除して、ノーイメージに戻します。よろしいですか？')) return;
 
   sheets[id].image = null;
-  setSavedSheets(sheets);
+  if (!setSavedSheets(sheets)) return;
   renderSaveCards(id);
   alert('画像を削除しました');
 }
 
+
+
+// 「選択中のキャラ」を覚えておく対象か（下書きは対象外）
+function selectedIdForMemo(id) { return typeof id === 'string' && id !== 'autosave_draft'; }
+
+// ページを開き直したとき（更新ボタン・再読み込み）、直前まで編集していた内容に戻す。
+//  ・下書き（自動保存）が、元のキャラの保存内容より新しければ、下書きを復元する
+//  ・そうでなければ、最後に選んでいたキャラを読み込む
+function restoreWorkOnLoad() {
+  try {
+    const sheets = getSavedSheets();
+    const draft = sheets['autosave_draft'];
+    let lastId = '';
+    try { lastId = localStorage.getItem('necro_last_slot') || ''; } catch (e) {}
+    const hasDraftId = draft && draft.draftOf && sheets[draft.draftOf];
+    if (draft && draft.data && (!draft.draftOf || !hasDraftId || (sheets[draft.draftOf].savedAt || '') <= (draft.savedAt || ''))) {
+      applyData(draft.data);
+      refreshSaveSlotOptions(hasDraftId ? draft.draftOf : '');
+      updateAutosaveStatusText('下書きを復元しました');
+      return;
+    }
+    if (lastId && sheets[lastId] && sheets[lastId].data) {
+      applyData(sheets[lastId].data);
+      refreshSaveSlotOptions(lastId);
+    }
+  } catch (e) {}
+}

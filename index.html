@@ -4,21 +4,54 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex, nofollow">
-<title>ネクロニカ キャラクターシート</title>
-<link rel="stylesheet" href="style.css?v=10">
+<title>ドール設計図館｜ネクロニカ用 非公式キャラクターシート作成・保管ツール</title>
+<link rel="stylesheet" href="style.css?v=109">
 </head>
 <body>
 
-<h1>永い後日談のネクロニカ</h1>
+<h1>ドール設計図館</h1>
+<div class="site-subtitle">『永い後日談のネクロニカ』用 非公式キャラクターシート作成・保管ツール</div>
 
 <div id="view-mode-image-container" style="display:none;"></div>
 
+<div class="card view-only" id="view-tools-card" style="padding:6px;">
+  <div class="view-only view-btn-row">
+    <button type="button" class="char-switch-btn" id="battle-toggle" onclick="toggleBattleView()" style="border-color:#8a2e2e; color:#f0a0a0;">⚔️ 戦闘用：ON</button>
+    <button type="button" class="char-switch-btn" onclick="exportViewURL()" style="border-color:#2e6a8a; color:#7ac4f0;">👀 閲覧用URL</button>
+    <button type="button" class="char-switch-btn" onclick="printSheetLayout()" style="border-color:#6a4a8a; color:#c9a8f0;">🖨 印刷</button>
+    <button type="button" class="char-switch-btn" onclick="exportCcfolia()" style="border-color:#2e8a6a; color:#7af0c4;">🎲 ココフォリアコマ</button>
+    <button type="button" class="char-switch-btn" onclick="exportChatPalette()" style="border-color:#8a8a2e; color:#f0f07a;">💬 チャパレ</button>
+  </div>
+</div>
+
 <div class="card sticky-top-bar">
   <div style="display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; padding: 2px;">
-    <button type="button" class="view-only char-switch-btn" onclick="exportViewURL()" style="border-color:#2e6a8a; color:#7ac4f0;">👀 閲覧用URLを作成</button>
     <div class="edit-only" style="display: flex; justify-content: space-between; align-items: center;">
       <button type="button" class="undo-btn" id="undo-btn" onclick="undoLastAction()" disabled>↩️ 元に戻す</button>
       <span id="autosave-status"></span>
+    </div>
+    <div class="edit-hide" style="display: flex; justify-content: space-between; align-items: center;">
+      <span style="color:#f0a0a0; font-weight:bold;">行動値</span>
+      <span>最大 <b id="bar-act" style="color:#ffd0d0;">0</b></span>
+    </div>
+    <div class="edit-hide" style="display: flex; justify-content: space-between; align-items: center;">
+      <span style="color:#f0a0a0; font-weight:bold;">損傷</span>
+      <span>基本 <b id="bar-broken-base" style="color:#ffd0d0;">0</b>/<span id="bar-parts-base">0</span> | 強化 <b id="bar-broken-ext" style="color:#ffd0d0;">0</b>/<span id="bar-parts-ext">0</span> | 宝 <b id="bar-broken-tre" style="color:#ffd0d0;">0</b>/<span id="bar-parts-tre">0</span></span>
+    </div>
+    <div class="bar-tools">
+      <button type="button" id="bar-fold-btn" onclick="toggleBarFold()">▲ 閉じる</button>
+      <button type="button" id="fs-btn" onclick="cycleFontSize()">文字：中</button>
+      <button type="button" id="roomy-btn" onclick="toggleRoomy()">表：標準</button>
+      <button type="button" id="theme-btn" onclick="toggleTheme()">配色：暗</button>
+    </div>
+    <div class="bar-detail">
+    <div class="toc-row">
+      <button type="button" onclick="jumpToSection('sec-basic')">基本</button>
+      <button type="button" onclick="jumpToSection('sec-miren')">未練</button>
+      <button type="button" onclick="jumpToSection('sec-skill')">スキル</button>
+      <button type="button" onclick="jumpToSection('sec-parts')">マニューバ</button>
+      <button type="button" class="non-battle" onclick="jumpToSection('sec-history')">履歴</button>
+      <button type="button" class="non-battle" onclick="jumpToSection('sec-memo')">メモ</button>
     </div>
     <div style="display: flex; justify-content: space-between; align-items: center;">
       <span style="color:#ff6b6b; font-weight:bold;">武装</span>
@@ -44,16 +77,38 @@
         Lv3: <span id="used-cyb-lv3">0</span>/<span id="max-cyb-lv3">0</span>
       </span>
     </div>
+    </div>
   </div>
 </div>
 
-<div class="card">
-  <div class="title">基本情報・強化値計算 & レベル取得制限チェッカー</div>
-  <div class="g2">
-    <div><label>PL名</label><input type="text" id="pl"></div>
-    <div><label>ドール名</label><input type="text" id="name"></div>
-  </div>
+<details class="card fold-card non-battle" id="limit-card" open>
+  <summary class="title">レベル取得制限チェッカー</summary>
   <div class="table-scroll">
+    <table class="limit-table">
+      <thead>
+        <tr>
+          <th style="width:20%">カテゴリ</th>
+          <th style="width:12%">レベル</th>
+          <th style="width:18%">規定上限</th>
+          <th style="width:15%">現在取得</th>
+          <th style="width:20%">判定</th>
+        </tr>
+      </thead>
+      <tbody id="limit-tbody"></tbody>
+    </table>
+    <div style="font-size:0.7rem; color:#aaa; margin-top:4px; text-align:right;">
+      ※「時計仕掛け」「業躯」のスキルを選ぶとLv3の追加枠が自動で+1されます
+    </div>
+  </div>
+</details>
+
+<div class="card" id="sec-basic">
+  <div class="title">基本情報・強化値計算</div>
+  <div class="kv-grid">
+    <div class="kv kv-wide"><label>PL名</label><input type="text" id="pl"></div>
+    <div class="kv kv-wide"><label>ドール名</label><input type="text" id="name"></div>
+  </div>
+  <div class="table-scroll non-battle">
     <table class="calc-table">
       <thead>
         <tr>
@@ -117,38 +172,25 @@
     </table>
   </div>
 
-  <div class="table-scroll">
-    <table class="limit-table">
-      <thead>
-        <tr>
-          <th style="width:20%">カテゴリ</th>
-          <th style="width:12%">レベル</th>
-          <th style="width:18%">規定上限</th>
-          <th style="width:15%">現在取得</th>
-          <th style="width:20%">判定</th>
-        </tr>
-      </thead>
-      <tbody id="limit-tbody"></tbody>
-    </table>
-    <div style="font-size:0.7rem; color:#aaa; margin-top:4px; text-align:right;">
-      ※「時計仕掛け」「業躯」のスキルを選ぶとLv3の追加枠が自動で+1されます
-    </div>
-  </div>
-
-  <div class="g2" style="margin-top:8px;">
-    <div><label>享年/外見</label><input type="text" id="age"></div>
-    <div><label>初期配置</label>
+  <div class="kv-grid" style="margin-top:8px;">
+    <div class="kv kv-wide"><label>享年/外見</label><input type="text" id="age"></div>
+    <div class="kv kv-wide"><label>暗示</label><input type="text" id="hint"></div>
+    <div class="kv"><label>初期配置</label>
       <select id="ps">
         <option>煉獄</option><option>花園</option><option>楽園</option>
       </select>
     </div>
+    <div class="kv"><label>身長</label><input type="text" id="height"></div>
+    <div class="kv"><label>体重</label><input type="text" id="weight"></div>
+    <div class="kv"><label>髪の色</label><input type="text" id="hair"></div>
+    <div class="kv"><label>瞳の色</label><input type="text" id="eye"></div>
+    <div class="kv"><label>肌の色</label><input type="text" id="skin"></div>
   </div>
-  <div class="g2">
-    <div><label>暗示</label><input type="text" id="hint"></div>
-    <div></div>
-  </div>
-  <div style="margin-bottom:6px;">
-    <label>記憶のカケラ（入手した数だけ追加できます）</label>
+  <div class="non-battle" style="margin-bottom:6px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;">
+      <label style="margin:0;">記憶のカケラ（入手した数だけ追加できます）</label>
+      <button type="button" class="sec" id="memory-all-toggle" onclick="toggleAllMemoryDetails()" style="font-size:.7rem;padding:2px 6px;white-space:nowrap;">詳細をすべて折りたたむ</button>
+    </div>
     <div id="memory-list"></div>
     <button type="button" class="sec edit-only" onclick="addMemoryEntry()" style="width:100%;margin-top:2px;padding:4px;">+ 記憶のカケラ枠を追加</button>
   </div>
@@ -160,12 +202,38 @@
     </div>
     <div>
       <label>基本行動値</label>
-      <input type="number" id="act-base" value="6" oninput="calcActionValue()">
+      <input type="number" id="act-base" value="6" min="0" oninput="calcActionValue()">
     </div>
   </div>
 </div>
 
-<div class="card">
+<div class="card" id="sec-miren">
+  <div class="title">たからもの・未練（姉妹への感情）</div>
+  <div style="margin-bottom:6px">
+    <label>たからもの（入手した数だけ追加できます）</label>
+    <div id="treasure-list"></div>
+    <button type="button" class="sec edit-only" onclick="addTreasureEntry()" style="width:100%;margin-top:2px;padding:4px;">+ たからもの枠を追加</button>
+    <div class="non-battle" style="font-size:0.68rem;color:#888;margin-top:4px;">
+      オート／バトルパート終了時、狂気点を1点回復。損傷時に所持パーツから取り除かれます。
+    </div>
+  </div>
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:25%">対象（姉妹）</th>
+          <th style="width:25%">未練（感情）</th>
+          <th style="width:35%">狂気点</th>
+          <th style="width:15%" class="col-op">操作</th>
+        </tr>
+      </thead>
+      <tbody id="list"></tbody>
+    </table>
+  </div>
+  <button type="button" class="sec edit-only" onclick="addRow()" style="width:100%;margin-top:4px;padding:4px">+ 未練枠を追加</button>
+</div>
+
+<div class="card" id="sec-skill">
   <div class="title">習得スキル</div>
   <div class="table-scroll">
     <table class="sheet-table maneuver-table">
@@ -191,43 +259,19 @@
   </div>
 </div>
 
-<div class="card">
+<div class="card" id="sec-parts">
   <div class="title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;">
     <span>マニューバ</span>
     <span style="display:flex;gap:4px;">
-      <button type="button" class="sec edit-only" onclick="resetPartUsedFlags()" style="font-size:.7rem;padding:2px 6px">使用チェックを一括解除</button>
+      <button type="button" class="sec" onclick="endBattle()" style="font-size:.7rem;padding:2px 6px">🏁 戦闘終了</button>
+      <button type="button" class="sec" onclick="resetPartUsedFlags()" style="font-size:.7rem;padding:2px 6px">使用チェックを一括解除</button>
       <button type="button" class="sec edit-only" onclick="resetUsed()" style="font-size:.7rem;padding:2px 6px">破損チェックを一括解除</button>
     </span>
   </div>
   <div id="parts-container"></div>
 </div>
 
-<div class="card">
-  <div class="title">たからもの・未練（姉妹への感情）</div>
-  <div style="margin-bottom:6px">
-    <label>たからもの（入手した数だけ追加できます）</label>
-    <div id="treasure-list"></div>
-    <button type="button" class="sec edit-only" onclick="addTreasureEntry()" style="width:100%;margin-top:2px;padding:4px;">+ たからもの枠を追加</button>
-    <div style="font-size:0.68rem;color:#888;margin-top:4px;">
-      オート／バトルパート終了時、狂気点を1点回復。損傷時に所持パーツから取り除かれます。
-    </div>
-  </div>
-  <div class="table-scroll">
-    <table>
-      <thead>
-        <tr>
-          <th style="width:25%">対象（姉妹）</th>
-          <th style="width:25%">未練（感情）</th>
-          <th style="width:35%">狂気点</th>
-          <th style="width:15%" class="col-op">操作</th>
-        </tr>
-      </thead>
-      <tbody id="list"></tbody>
-    </table>
-  </div>
-  <button type="button" class="sec edit-only" onclick="addRow()" style="width:100%;margin-top:4px;padding:4px">+ 未練枠を追加</button>
-</div>
-
+<div class="non-battle" id="sec-history">
 <!-- 寵愛点サマリー -->
 <div style="background: #25252e; padding: 12px; border-radius: 6px; margin-bottom: 15px; border: 1px solid #444;">
   <h3 style="margin-top: 0; color: #8ff; font-size: 1rem; border-bottom: 1px solid #555; padding-bottom: 4px;">寵愛点サマリー</h3>
@@ -270,14 +314,34 @@
 </table>
 <button type="button" class="sec edit-only" onclick="addChouaiUseRow()" style="background: #333; color: #fff; border: 1px solid #666; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 0.8rem;">+ 使い道を追加</button>
 
+</div>
+
+<div class="card non-battle" id="sec-memo" style="margin-top:14px;">
+  <div class="title" style="cursor:pointer;" onclick="toggleFreeMemo()"><span id="free-memo-chev" style="display:inline-block;width:1em;">▾</span>メモ <span id="free-memo-preview" style="font-size:.72rem;color:#888;font-weight:normal;"></span></div>
+  <div id="free-memo-body">
+  <div style="font-size:0.72rem; color:#888; margin-bottom:4px;">自由に書けるメモ欄です。保管所テキストの読み込みで読み込めなかった行は、ここに追記されます。</div>
+  <textarea id="free-memo" rows="4" oninput="autoResizeTextarea(this)" onfocus="setTimeout(() => autoResizeTextarea(this), 80)" placeholder="メモ" style="min-height:90px; resize:none; overflow-y:hidden;"></textarea>
+  </div>
+</div>
+
 <div class="card edit-only">
   <div class="title">キャラクター管理（複数保存）</div>
 
   <label style="margin-bottom:4px;">保存済みキャラクター（タップで選択）</label>
   <div class="save-cards-row" id="save-cards"></div>
+  <div id="backup-reminder" style="display:none; font-size:0.75rem; margin:2px 0 6px 2px;"></div>
   <select id="save-slot" style="display:none">
     <option value="">-- 新規保存 --</option>
   </select>
+
+  <div class="action-btn-row">
+    <button type="button" class="action-btn c-teal" onclick="newBlankSheet()">
+      <span class="icon">🆕</span><span>新規作成<br>（白紙に戻す）</span>
+    </button>
+    <button type="button" class="action-btn c-blue" onclick="openImageOptions()">
+      <span class="icon">🖼</span><span>画像で保存</span>
+    </button>
+  </div>
 
   <div class="action-btn-row">
     <button type="button" class="action-btn c-green" onclick="saveData()">
@@ -307,6 +371,15 @@
   </div>
   <input type="file" id="thumb-file-input" accept="image/*" style="display:none" onchange="onThumbFileSelected(event)">
 
+  <div class="action-btn-row" style="margin-top:8px;">
+    <button type="button" class="action-btn c-blue" onclick="restoreDeletedSave()">
+      <span class="icon">↩️</span><span>削除したキャラを<br>復元</span>
+    </button>
+    <button type="button" class="action-btn c-orange" onclick="openHokanshoImport()">
+      <span class="icon">📝</span><span>保管所テキスト<br>から読み込む</span>
+    </button>
+  </div>
+
   <button type="button" class="edit-only" id="export-share-toggle" onclick="toggleExportShareSection()" style="
     width:100%; margin-top:8px; padding:6px; background:#1c1c22; color:#aaa;
     border:1px dashed var(--border); border-radius:4px; font-size:.78rem; cursor:pointer;
@@ -320,27 +393,21 @@
       <button type="button" class="action-btn c-teal" onclick="document.getElementById('json-file-input').click()">
         <span class="icon">📁</span><span>JSONを<br>読み込む</span>
       </button>
-      <button type="button" class="action-btn c-purple" onclick="exportCcfolia()">
-        <span class="icon">🎲</span><span>ココフォリア<br>出力</span>
-      </button>
     </div>
     <input type="file" id="json-file-input" accept=".json,application/json" style="display:none" onchange="onJsonFileSelected(event)">
     <div class="action-btn-row">
       <button type="button" class="action-btn c-yellow" onclick="exportShareURL()">
         <span class="icon">🔗</span><span>共有URLを<br>作成</span>
       </button>
-      <button type="button" class="action-btn c-teal" onclick="exportViewURL()">
-        <span class="icon">👀</span><span>閲覧用URLを<br>作成</span>
-      </button>
     </div>
-    <div class="action-btn-row">
-      <button type="button" class="action-btn c-cyan" onclick="exportShareCode()">
-        <span class="icon">📤</span><span>共有コードを<br>作成</span>
-      </button>
-      <button type="button" class="action-btn c-purple" onclick="importShareCode()">
-        <span class="icon">📥</span><span>共有コードから<br>読み込む</span>
-      </button>
-    </div>
+    <details class="emergency-fold share-manage">
+      <summary>🔗 発行した共有URLの控え</summary>
+      <div style="font-size:.74rem;color:#999;margin:6px 0;">この端末で作った共有URL・閲覧用URLの控えです。あとから「コピー」で取り出せます。URL自体は取り消せないので、広く配らないよう気をつけてください。</div>
+      <div id="share-list"></div>
+      <div class="action-btn-row" style="margin-top:6px;">
+        <button type="button" class="sec" onclick="addShareByURL()">URLを貼って加える</button>
+      </div>
+    </details>
     <div class="action-btn-row">
       <button type="button" class="action-btn c-green" onclick="exportAllCharactersBackup()">
         <span class="icon">📦</span><span>全キャラを<br>バックアップ</span>
@@ -351,13 +418,13 @@
     </div>
     <input type="file" id="backup-file-input" accept=".json,application/json" style="display:none" onchange="onBackupFileSelected(event)">
     <div style="font-size:0.7rem; color:#888; margin-top:4px;">
-      ※他のブラウザ・端末に移したい場合は「JSON出力」→別端末で「JSONを読み込む」、または「共有URLを作成」してURLを送り、相手がそのURLを開くと自動で読み込まれます。「閲覧用URL」は開くと自動的に表示モード(編集不可)になる専用のリンクです(相手のブラウザには保存されません)。「共有コード」は文字列をコピー&貼り付けする方式です。「全キャラをバックアップ」は、保存済みの全キャラクターをまとめて1つのファイルに書き出します(機種変更やブラウザデータが消えた時の保険用です)。
+      ※他のブラウザ・端末に移したい場合は「JSON出力」→別端末で「JSONを読み込む」、または「共有URLを作成」してURLを送り、相手がそのURLを開くと自動で読み込まれます。上のバーの「閲覧用URL」は開くと自動的に表示モード(編集不可)になる専用のリンクです(相手のブラウザには保存されません)。「全キャラをバックアップ」は、保存済みの全キャラクターをまとめて1つのファイルに書き出します(機種変更やブラウザデータが消えた時の保険用です)。
     </div>
   </div>
 
   <div style="font-size:0.7rem; color:#888; margin-top:8px;">
     ※カードをタップしてキャラクターを選択すると、削除・複製・画像設定のボタンが出てきます。「新規保存」のまま保存すると名前を聞かれて新しいキャラとして保存されます。<br>
-    ※未保存の変更がある場合、一定時間ごとに自動でブラウザに保存されます（画面上部に保存時刻が表示されます）。
+    ※自動保存は下書き枠にだけ保存されます（画面上部に「自動保存（下書き）」と表示されます）。選択中のキャラクターは「💾 保存」を押すまで変わりません。削除したキャラクターは「削除したキャラを復元」ボタンから復元できます（直近5件まで）。
   </div>
 </div>
 
@@ -395,8 +462,8 @@
   border: 1.5px solid #8b0000;
 ">🔒 表示</button>
 
-<!-- 右下固定：README.mdへ移動するボタン -->
-<a href="./README.md" target="_blank" rel="noopener noreferrer" style="
+<!-- 右下固定：README（使い方）をアプリ内で開くボタン -->
+<button type="button" onclick="openHelp()" style="
   position: fixed;
   bottom: 20px;
   right: 20px;
@@ -405,7 +472,6 @@
   border: 1px solid #555;
   padding: 8px 14px;
   border-radius: 20px;
-  text-decoration: none;
   font-size: 0.85rem;
   box-shadow: 0 4px 10px rgba(0,0,0,0.6);
   z-index: 9999;
@@ -413,9 +479,125 @@
   align-items: center;
   gap: 4px;
   font-weight: bold;
-">
-  📜 使い方を見る
-</a>
+  cursor: pointer;
+  font-family: sans-serif;
+">📜 README</button>
+
+<!-- 保管所テキストから読み込む：貼り付け画面＋読み込み結果 -->
+<div id="hokansho-overlay" style="
+  display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8);
+  z-index:10003; padding:16px; overflow-y:auto;
+" onclick="if(event.target===this) closeHokanshoImport()">
+  <div style="max-width:560px; margin:20px auto; background:#18181c; border:1.5px solid #8b0000; border-radius:10px; padding:14px 16px 18px; box-shadow:0 8px 24px rgba(0,0,0,0.7); font-family:sans-serif; font-size:0.82rem; line-height:1.6; color:#ddd;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+      <span style="color:#f0a0a0; font-weight:bold; font-size:1.05rem;">保管所テキストから読み込む</span>
+      <button type="button" onclick="closeHokanshoImport()" style="background:none;border:none;color:#aaa;font-size:1.3rem;cursor:pointer;line-height:1;">✕</button>
+    </div>
+    <div id="hokansho-input-panel">
+      <div style="color:#aaa; margin-bottom:6px;">キャラクター保管所の「テキスト出力」で出てくるテキストを、そのまま貼り付けてください。今のシートの内容は上書きされます（「↩️ 元に戻す」で戻せます）。</div>
+      <textarea id="hokansho-text" rows="12" placeholder="タイトル：ネクロニカ&#10;キャラクター名：…&#10;[ポジション] …&#10;[頭] …" style="width:100%; font-size:0.8rem;"></textarea>
+      <div style="display:flex; gap:8px; margin-top:8px;">
+        <button type="button" class="sec" onclick="closeHokanshoImport()" style="flex:1;">キャンセル</button>
+        <button type="button" onclick="runHokanshoImport()" style="flex:2;">読み込む</button>
+      </div>
+    </div>
+    <div id="hokansho-result-panel" style="display:none;"></div>
+  </div>
+</div>
+
+<!-- README（使い方）オーバーレイ -->
+<div id="help-overlay" style="
+  display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8);
+  z-index:10002; padding:16px; overflow-y:auto;
+" onclick="if(event.target===this) closeHelp()">
+  <div style="max-width:560px; margin:20px auto; background:#18181c; border:1.5px solid #8b0000; border-radius:10px; padding:14px 16px 18px; box-shadow:0 8px 24px rgba(0,0,0,0.7); font-family:sans-serif; font-size:0.82rem; line-height:1.6; color:#ddd;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+      <span style="color:#f0a0a0; font-weight:bold; font-size:1.05rem;">ドール設計図館（使い方）</span>
+      <button type="button" onclick="closeHelp()" style="background:none;border:none;color:#aaa;font-size:1.3rem;cursor:pointer;line-height:1;">✕</button>
+    </div>
+
+    <p style="margin:0 0 4px;">『永い後日談のネクロニカ』用の非公式キャラクターシート作成・保管ツールです。</p>
+
+    <h4 style="color:#f0c060; margin:12px 0 4px;">⚠️ ご利用にあたって</h4>
+    <ul style="margin:0; padding-left:1.2em;">
+      <li>データの取り扱いについて：本ツールに入っている効果の文章は、公式が配布しているサンプルキャラクターに載っている範囲だけです。それ以外のスキル・パーツは、名前だけが入っています。効果は、お手持ちのルールブックを見て、ご自分で入力してください(入力した内容は、このブラウザにだけ保存されます)。</li>
+      <li>データ保存について：入力したデータはブラウザ（ローカルストレージ）に保存されます。ブラウザのデータを消すとキャラクターも消えるので、「全キャラをバックアップ」で、時々書き出しておくことをおすすめします。</li>
+      <li>共有URL・閲覧用URLについて：作ると、キャラのデータが外部のサーバー（Supabase）に保存されます。URLを知っている人は誰でも読み込め、作ったURLはあとから取り消せません。広く配らないようにご注意ください。</li>
+      <li>免責：本ツールの利用により生じた損害（データの消失など）について、制作者は責任を負えません。</li>
+    </ul>
+
+    <h4 style="color:#8ff; margin:12px 0 4px;">■ 基本の入力</h4>
+    <ul style="margin:0; padding-left:1.2em;">
+      <li>ポジション・メインクラス・サブクラスを選ぶと、武装・変異・改造のパーツ配置上限が自動計算されます。</li>
+      <li>「ボーナス」は武装・変異・改造のいずれか1つに+1です。寵愛による修正は手入力で加算します。</li>
+      <li>最大行動値は「基本行動値＋損傷していないパーツの『最大行動値+N』」で自動計算されます(内訳も表示)。</li>
+      <li>画面上部の固定バーには、武装・変異・改造のレベル別の使用数が出ます。表示画面(「🔒 表示」)では、最大行動値と損傷数(基本・強化・宝＝たからもの)も出ます。</li>
+    </ul>
+
+    <h4 style="color:#8ff; margin:12px 0 4px;">■ スキル</h4>
+    <ul style="margin:0; padding-left:1.2em;">
+      <li>「+ ポジション / メインクラス / サブクラス」で行を追加し、スキル名を選ぶとタイミング・コスト・射程・効果が入ります。</li>
+      <li>タイミングが「ジャッジ・ダメージ・ラピッド」のスキルだけ、「使」チェックが出ます。</li>
+      <li>「時計仕掛け」「業躯」を選ぶと、Lv3の追加枠が自動で+1されます。</li>
+    </ul>
+
+    <h4 style="color:#8ff; margin:12px 0 4px;">■ マニューバ(パーツ)</h4>
+    <ul style="margin:0; padding-left:1.2em;">
+      <li>各部位の「+ パーツを選択して追加」から選びます。上限に達した種別・レベルは候補に出ません。</li>
+      <li>「損」を付けるとそのパーツの『最大行動値+N』が行動値から引かれます。「使」は使用済みの目印です(タイミングが「オート」「アクション」のパーツには出ません)。</li>
+      <li>「色」でカテゴリを選ぶと行が色分けされます。効果メモの内容から自動で判定もします。</li>
+      <li>「メモ」欄は、タイトルを押すと折りたためます(折りたたむと冒頭の一部が見えます)。</li>
+      <li>効果メモが空のパーツは「+ 効果メモを追加」で書き足せます。</li>
+      <li>各部位の見出しには、損傷していない残りパーツ数が出ます。損傷したパーツは灰色で、名前に取り消し線が付きます。</li>
+      <li>「たからもの」を損傷にすると、所持パーツから取り除かれます。</li>
+    </ul>
+
+    <h4 style="color:#8ff; margin:12px 0 4px;">■ たからもの・未練・寵愛点</h4>
+    <ul style="margin:0; padding-left:1.2em;">
+      <li>「たからもの」は枠を追加し、「パーツとして配置」で好きな部位に置けます。</li>
+      <li>未練の下の「発狂」欄に、発狂の名前と効果を書けます。狂気点は「0/4」の形で、−＋ボタンでも増減でき、4/4になると赤くなります。</li>
+      <li>寵愛点は、セッション履歴(獲得)と使い道の記録から、残りを自動集計します。</li>
+    </ul>
+
+    <h4 style="color:#8ff; margin:12px 0 4px;">■ 保存・切り替え</h4>
+    <ul style="margin:0; padding-left:1.2em;">
+      <li>データはこのブラウザの中に保存されます。「💾 保存」で保存し、カードを選んで保存すると上書きになります。</li>
+      <li>未保存の変更は一定時間ごとに自動保存されますが、下書き枠にだけ保存されます。ページを更新したり開き直したりしたときは、直前まで編集していた内容(下書き、または最後に選んでいたキャラ)に自動で戻り、スクロール位置と折りたたみの開閉も元の状態になります。選択中のキャラクターは「💾 保存」を押すまで変わりません。「↩️ 元に戻す」で戻せるのは、行の削除・読み込み・新規作成・一括解除などの大きな操作です(文字の入力は戻せません)。</li>
+      <li>「🔄 切替」で保存済みキャラを一覧から切り替えられます。</li>
+      <li>「🆕 新規作成(白紙に戻す)」で、今の入力をすべて白紙に戻せます。保存済みのキャラは消えず、「↩️ 元に戻す」で今の入力も戻せます。</li>
+      <li>「🔒 表示 / ✏️ 編集」で、セッション中に見る用の表示モード(編集不可・損傷チェックのみ操作可)に切り替えます。</li>
+      <li>表示モードの「⚔️ 戦闘用」は、パーツ・スキル・未練・行動値だけに絞る表示です(押すと全項目を表示)。記憶のカケラは表示せず、スキルの表は、区分の列と色の凡例を省いて行を詰めます(未練の表も同じように詰め、発狂の効果文も表の幅いっぱいに出します)。そのため、1画面でたくさん見られます。</li>
+      <li>画面上部の固定バーは、「▲ 閉じる」で武装・変異・改造の表を畳めます。「基本」「未練」などのボタンで、その項目へ飛べます。「文字：中」を押すと、文字の大きさが 小→中→大 と切り替わります。</li>
+      <li>固定バーの「表：標準/ゆったり」で、スキル・マニューバの表の文字と余白を広げられます。表の枠に入りきらない文字(長い名前など)は、自動で小さくなって枠に収まります。「配色：暗/明」で、画面を白地にもできます。スキル・マニューバの見出しの下には、種別の色の意味が出ます。損傷した行は灰色(左端が赤)、使用済みの行は左端が黄色で見分けられます。</li>
+      <li>表示モードでも、「使用チェックを一括解除」は押せます(セッション終了時などに)。</li>
+      <li>削除したキャラクターは、「削除したキャラを復元」で直近5件まで戻せます。</li>
+      <li>ブラウザの保存領域(約5MB)がいっぱいになると保存できません。使用量が8割を超えると保存時に知らせるので、その前に「全キャラをバックアップ」で書き出してください。いっぱいで保存できないときは、削除したキャラのゴミ箱を空にして保存し直します。</li>
+      <li>表示モードの上のバーの「🖨 印刷」で、公式のキャラクターシートに近い並びで、A4縦2枚(1枚目＝基本情報、用紙の一番下に記憶のカケラ・未練、2枚目＝最大行動値・スキル・頭腕胴脚のマニューバ(戦闘で使うものが1枚にまとまります))に印刷できます。空欄の行も残るので、印刷してから手書きで書き足せます(履歴やメモは出ません。全部を残したいときは、「画像で保存」か「JSON出力」を使います)。</li>
+      <li>印刷には、ページの最後に「Printed by ドール設計図館, (サイトのURL)」と小さく入ります。</li>
+      <li>「🏁 戦闘終了」で、使用チェックをまとめて外せます。続けて「損傷しているパーツも修復するか」を聞かれます(「↩️ 元に戻す」で戻せます)。マニューバの見出しにあります。</li>
+      <li>記憶のカケラは、数字・名前・詳細を分けて書けます。複数あるときは、体重や髪の色のように横に並びます(スマホでは2列)(以前に「名前：詳細」の1行で入れていたデータは、自動で名前と詳細に分かれます)。</li>
+      <li>記憶のカケラの詳細は、長くなっても4行ぶんで止まり、中でスクロールできます(右下の角を引くと広げられます)。また、▾ボタンで1件ずつ、または「詳細をすべて折りたたむ」でまとめて折りたためます(折りたたんでいる間は、詳細の書き出しが1行だけ薄く出ます。押すと開きます。折りたたみの状態は保存されません。印刷では、すべて開いた状態で出ます)。</li>
+      <li>「🖼 画像で保存」で、キャラクターシートを1枚の画像(PNG)として保存できます(共有やココフォリアの立ち絵置き場などに)。保存前に、配色(暗い背景/白い背景)と内容(すべて/戦闘用)を選べます。iPhoneでは画像が開くので、長押しで保存します。</li>
+    </ul>
+
+    <h4 style="color:#8ff; margin:12px 0 4px;">■ 共有・バックアップ</h4>
+    <ul style="margin:0; padding-left:1.2em;">
+      <li>「共有URLを作成」(出力・共有の中): 相手が開くとキャラが読み込まれます。上のバーの「閲覧用URL」: 相手の画面に表示するだけのリンクで、開いた人は編集に切り替えられません(損傷・使用のチェックだけ操作でき、保存もされません)。開いた直後は全項目が表示され、「戦闘用」で絞り込めます。</li>
+      <li>共有URL・閲覧用URLを作ると、キャラのデータが外部のデータベースに保存されます(URLを知っている人だけが見られます)。接続できない時は、データをURLに埋め込む方式に自動で切り替わります。</li>
+      <li>「🔗 発行した共有URLの控え」(出力・共有の中)に、この端末で作った共有URL・閲覧用URLが並び、「コピー」でもう一度URLを取り出せます。作ったURLは取り消せないため、URLを作る前に確認が出ます。以前作ったURLは「URLを貼って加える」で控えに入れられます。</li>
+      <li>「JSON出力」は、ファイルで別端末に移す方法です。上のバーの「🎲 ココフォリアコマ」で駒用のデータを、「💬 チャパレ」でチャットパレットに貼る文章をコピーできます(コマのメモ欄には名前・クラス・行動値・記憶のかけら・部位ごとのパーツ名が、ステータス欄には行動値・「○○への未練」ごとの狂気点(0〜4)と、「せぼね」など貯めて使うパーツのストック欄(0/0)が入ります。チャパレは先頭に判定コマンド、続けてポジション・クラスのスキルと頭・腕・胴・脚のマニューバが「【名前】\n《T:タイミング／C:コスト／R:射程》\n効果」の形で並び、攻撃マニューバには行頭に 1na が付きます。ココフォリアのルームのシステムは「ネクロニカ」にしてください)。</li>
+      <li>「全キャラをバックアップ」で、保存済みの全キャラを1つのファイルに書き出せます。ブラウザのデータが消えた時や機種変更の保険として、時々取っておくのがおすすめです。最後に取ってからの日数が、キャラクター管理に表示されます(14日以上たつと色が変わります)。</li>
+      <li>データ未登録のスキル・パーツに自分で書いた効果は、このブラウザに覚えられます。次からは、同じスキル・パーツを選ぶと自動で入ります(「全キャラをバックアップ」にも一緒に入ります)。</li>
+      <li>「保管所テキストから読み込む」(キャラクター管理の「削除したキャラを復元」の隣)で、キャラクター保管所の「テキスト出力」を貼り付けると、キャラ名・身長・体重・髪/瞳/肌の色・クラス・スキル・マニューバ(パーツ。効果メモや名前に「たからもの」とあるもの、シートの「たからもの」欄と同じ名前のもの、以前に分類を「たからもの」にしたことがある名前のもの、このシートのパーツ一覧に無くてタイミングがオート・コストなし・射程なしのものは、分類が「たからもの」になります)・記憶のカケラ・未練(発狂時の名前・効果を含む)・セッション履歴(獲得寵愛)が反映されます(テキストに入っている項目だけが上書きされ、「↩️ 元に戻す」で戻せます)。強化値は、ボーナス(+1する列)と寵愛による修正を反映します。メインクラス・サブクラス・合計と最大行動値は自動計算のため、テキストと違う場合は読み込み結果に表示されます。読み込めなかった行と、シートに欄が無い成長履歴の文章は、ページ下部の「メモ」欄に追記されます(今のメモは消えません)。</li>
+    </ul>
+
+    <h4 style="color:#8ff; margin:12px 0 4px;">■ ライセンス・権利表記</h4>
+    <p style="margin:0;">本ツールは『永い後日談のネクロニカ』の二次創作・ファンツールです。無料・非営利で公開しており、公式とは関係ありません。</p>
+    <p style="margin:6px 0 0;">『永い後日談のネクロニカ』 Copyright © 2011 Patch Works / Copyright © 2011 Kamiya Ryo / Tsugihagi honpo All Rights Reserved.</p>
+    <p style="margin:6px 0 0;">権利者の方からの削除・修正のご要請があった場合は、速やかに対応します。ご連絡は、X（旧Twitter）の「ドール設計図館」（@dollsekkeizukan）からお願いします。</p>
+    <p style="margin:6px 0 0;">本ツールの制作には、AIアシスタント Claude（Anthropic）の支援を受けています。</p>
+  </div>
+</div>
 
 <!-- キャラクター切替オーバーレイ -->
 <div id="char-switch-overlay" style="
@@ -431,12 +613,16 @@
   </div>
 </div>
 
-<script src="data.js?v=10"></script>
-<script src="app-core.js?v=10"></script>
-<script src="app-parts.js?v=10"></script>
-<script src="app-skills.js?v=10"></script>
-<script src="app-save.js?v=10"></script>
-<script src="app-share.js?v=10"></script>
-<script src="app-main.js?v=10"></script>
+<script src="data.js?v=109"></script>
+<script src="app-core.js?v=109"></script>
+<script src="app-parts.js?v=109"></script>
+<script src="app-skills.js?v=109"></script>
+<script src="app-save.js?v=109"></script>
+<script src="app-dict.js?v=109"></script>
+<script src="app-image.js?v=109"></script>
+<script src="app-look.js?v=109"></script>
+<script src="app-sheetprint.js?v=109"></script>
+<script src="app-share.js?v=109"></script>
+<script src="app-main.js?v=109"></script>
 </body>
 </html>

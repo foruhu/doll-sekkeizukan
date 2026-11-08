@@ -45,7 +45,7 @@ tr.used input:not([type="checkbox"]), tr.used textarea, tr.used select { opacity
 
 /* --- キャラクター管理（複数保存）--- */
 .slot-select-row { margin-bottom: 8px; }
-.action-btn-row { display: flex; gap: 10px; overflow-x: auto; padding: 4px 2px 10px 2px; -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
+.action-btn-row { display: flex; gap: 10px; flex-wrap: wrap; padding: 4px 2px 10px 2px; -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
 .action-btn { flex: 0 0 auto; min-width: 132px; display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 14px; background: #14161a; border: 1.5px solid #444; font-weight: bold; font-size: .82rem; cursor: pointer; text-align: left; line-height: 1.3; font-family: sans-serif; }
 .action-btn:active { opacity: 0.75; }
 .action-btn .icon { font-size: 1.5rem; flex-shrink: 0; }
@@ -172,3 +172,296 @@ body.view-mode th { color: #ddd; }
 }
 /* 表示モードでは、まだメモが追加されていない（ボタンが残ったままの）2段目は場所を取らないようにする */
 body.view-mode tr.part-memo-row:has(.add-memo-btn) { display: none; }
+
+/* 基本情報：ラベルが黒い小さなセルで、入力欄と横並びの格子 */
+.kv-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin-bottom: 6px; }
+.kv { display: flex; align-items: stretch; min-width: 0; border-radius: 4px; overflow: hidden; border: 1px solid #444; background: #18181c; }
+.kv.kv-wide { grid-column: 1 / -1; }
+.kv > label { flex: 0 0 auto; display: flex; align-items: center; margin: 0; padding: 0 8px; background: #0e0e12; color: #ddd; font-size: .75rem; white-space: nowrap; }
+.kv > input, .kv > select { flex: 1 1 auto; min-width: 0; width: 100%; border: none; border-radius: 0; margin: 0; background: #2a2a30; color: #fff; }
+@media (min-width: 640px) { .kv-grid { grid-template-columns: repeat(3, 1fr); } }
+
+/* 折りたたみできるカード（見出しを押すと開閉） */
+.fold-card > summary.title { cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+.fold-card > summary.title::-webkit-details-marker { display: none; }
+.fold-card > summary.title::after { content: "▾"; color: #aaa; font-size: 1rem; transition: transform .15s; }
+.fold-card:not([open]) > summary.title::after { transform: rotate(-90deg); }
+.fold-card:not([open]) > summary.title { margin-bottom: 0; border-bottom: none; }
+
+/* 戦闘用表示（表示モードのときだけ）：パーツ・スキル・未練・行動値だけに絞る */
+body.view-mode.battle-view .non-battle { display: none !important; }
+
+/* 損傷したパーツ：行全体を灰色にして、名前に取り消し線を付ける */
+tr.broken td { background: rgba(140, 140, 140, 0.16); }
+tr.broken .p-name { text-decoration: line-through; }
+tr.broken input, tr.broken textarea, tr.broken select { color: #999; }
+
+/* 部位見出しの残りパーツ数 */
+.part-count { font-size: .72rem; font-weight: normal; color: #ffd0d0; margin-left: 6px; letter-spacing: 0; }
+.part-count.low { color: #ff8888; font-weight: bold; }
+
+/* 表示モードの固定バー：2つのボタンを横に並べて、縦幅を取らない */
+body.view-mode .view-btn-row { display: flex; gap: 6px; }
+.view-btn-row .char-switch-btn { flex: 1; width: auto; margin: 0; padding: 5px 4px; font-size: .75rem; }
+
+/* 未練：2行目の「発狂」欄（発狂名＋効果） */
+.miren-mad-row td { padding: 0 2px 6px; border-top: none; }
+.miren-mad-box { display: flex; align-items: flex-start; gap: 4px; }
+.miren-mad-label { flex: 0 0 auto; min-width: 2.8em; text-align: center; box-sizing: border-box; background: #0e0e12; color: #f0a0a0; font-size: .72rem; padding: 5px 6px; border-radius: 3px; white-space: nowrap; }
+.miren-mad-box .miren-madname { flex: 0 0 30%; min-width: 0; text-align: left; }
+.miren-mad-box .miren-madeffect { flex: 1 1 auto; min-width: 0; text-align: left; resize: none; overflow-y: hidden; font-size: .78rem; line-height: 1.3; min-height: 30px; }
+body.view-mode .miren-mad-row.empty { display: none; }
+
+/* --- 印刷：白地に黒文字、編集用の部品や固定ボタンは出さない --- */
+@media print {
+  :root { --bg: #fff; --card: #fff; --text: #000; --border: #999; --input: #fff; --header-bg: #eee; }
+  body { background: #fff !important; color: #000 !important; padding: 0; font-size: 11px; }
+  h1 { color: #000; border-bottom: 1px solid #000; }
+  .title { color: #000 !important; border-bottom: 1px solid #000 !important; }
+  .card { background: #fff !important; border: 1px solid #999 !important; box-shadow: none !important; break-inside: auto; }
+  .sticky-top-bar { position: static !important; background: #fff !important; backdrop-filter: none !important; box-shadow: none !important; border: 1px solid #000 !important; }
+  .sticky-top-bar * { color: #000 !important; }
+  .corner-btn, .edit-only, .view-only, .col-op, .color-col, .del, .undo-btn, #autosave-status,
+  button, #hokansho-overlay, #help-overlay, #char-switch-overlay { display: none !important; }
+  .view-btn-row { display: none !important; }
+  input, select, textarea { background: transparent !important; color: #000 !important; border-color: #bbb !important; -webkit-appearance: none; appearance: none; }
+  table, th, td { color: #000 !important; border-color: #999 !important; }
+  th { background: #eee !important; }
+  tr.part-row td, tr.part-memo-row td, tr.skill-row td, tr.skill-memo-row td { background: #fff !important; }
+  tr.broken td { background: #ddd !important; }
+  .kv { border-color: #999; background: #fff; }
+  .kv > label { background: #eee; color: #000; }
+  .kv > input, .kv > select { background: #fff; color: #000; }
+  .part-header { background: #eee !important; color: #000 !important; border-color: #999 !important; }
+  .part-count, .part-header .val { color: #000 !important; }
+  .miren-mad-label { background: #eee; color: #000; }
+  .fold-card > summary.title::after { display: none; }
+  tr { break-inside: avoid; }
+  textarea { overflow: visible !important; }
+}
+
+/* 印刷のとき、はみ出す1行入力欄を折り返し表示に差し替えるための部品（画面では出さない） */
+.print-clone { display: none; }
+@media print {
+  .print-clone { display: block; flex: 1 1 auto; min-width: 0; white-space: pre-wrap; word-break: break-all; text-align: left; padding: 2px 4px; color: #000; }
+  input.print-hidden { display: none !important; }
+}
+
+/* サイト名の下のサブタイトル */
+.site-subtitle { text-align: center; text-wrap: balance; font-size: .66rem; color: #999; margin: -4px 0 10px; line-height: 1.4; }
+@media print { .site-subtitle { color: #000 !important; } }
+
+/* --- 固定バーのツール行・目次・折りたたみ --- */
+.bar-tools { display: flex; gap: 6px; justify-content: flex-end; }
+.bar-tools button, .toc-row button { background: #22222a; color: #ddd; border: 1px solid #555; border-radius: 12px; padding: 2px 10px; font-size: .7rem; cursor: pointer; font-family: sans-serif; }
+.toc-row { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 2px; }
+.sticky-top-bar.bar-collapsed .bar-detail { display: none; }
+body.view-mode .bar-tools { justify-content: space-between; }
+@media print { .bar-tools, .toc-row { display: none !important; } .sticky-top-bar.bar-collapsed .bar-detail { display: block !important; } }
+
+/* --- 文字サイズ（小・中・大）：rem で書かれた大きさがまとめて変わる --- */
+html.fs-small { font-size: 14px; }
+html.fs-large { font-size: 18px; }
+
+/* --- iPhone：入力欄が16px未満だと、タップした時に画面が勝手に拡大されるので、編集中だけ16pxにする --- */
+/* マニューバ・スキル表の1行目の欄は、16pxにすると列が窮屈で名前が読めなくなるので、今の大きさのままにする */
+@media (pointer: coarse) {
+  body:not(.view-mode) input:not([type="checkbox"]):not([type="radio"]):not(.maneuver-table input),
+  body:not(.view-mode) select:not(.maneuver-table select),
+  body:not(.view-mode) textarea { font-size: 16px !important; }
+  /* 表の欄は、押して入力している間だけ16pxにして、拡大されないようにする */
+  body:not(.view-mode) .maneuver-table input:focus,
+  body:not(.view-mode) .maneuver-table select:focus { font-size: 16px !important; }
+}
+
+/* --- データ未登録のパーツ（効果メモを足せる印） --- */
+.add-memo-btn.unregistered { border-style: dashed; color: #c9a8a8; }
+
+.emergency-fold { margin: 6px 0; }
+.emergency-fold > summary { cursor: pointer; font-size: 0.78rem; color: #aaa; padding: 4px 2px; }
+
+/* 記憶のカケラ：数字・名前・詳細 */
+.memory-entry { margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px dashed #3a2a2a; }
+.memory-head { display: flex; gap: 6px; align-items: center; margin-bottom: 3px; }
+.memory-entry .memory-head input.memory-num { width: 3.6em; flex: none; text-align: center; }
+.memory-entry .memory-head input.memory-name { width: auto; flex: 1; min-width: 0; text-align: left; }
+.memory-entry .memory-detail { width: 100%; box-sizing: border-box; min-height: 34px; resize: none; overflow: hidden; }
+
+.memory-head .memory-toggle { flex: none; width: 2em; padding: 4px 0; background: #2a1e1e; border: 1px solid var(--border); color: #ccc; border-radius: 3px; cursor: pointer; }
+.memory-entry.collapsed .memory-detail { display: none; }
+body.print-mode .memory-entry.collapsed .memory-detail { display: block; }
+body.print-mode .memory-toggle, body.print-mode #memory-all-toggle { display: none; }
+/* 記憶のカケラの詳細：長い文章でも枠が伸びすぎないように、4行ぶんで止めて中でスクロールする */
+.memory-entry .memory-detail { max-height: 6.2em; overflow-y: auto; resize: vertical; }
+body.print-mode .memory-entry .memory-detail { max-height: none; overflow: visible; }
+/* 記憶のカケラの名前欄：行いっぱいに伸ばさず、短めにする（削除ボタンは右端） */
+.memory-entry .memory-head input.memory-name { flex: 0 1 12em; }
+.memory-entry .memory-head .del { margin-left: auto; }
+/* 記憶のカケラ：複数あるときは、体重・髪の色のように横に並べる（幅に合わせて2列〜） */
+#memory-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(165px, 47%), 1fr)); gap: 6px 8px; }
+#memory-list .memory-entry { margin: 0; min-width: 0; }
+#memory-list .memory-entry .memory-head input.memory-name { flex: 1 1 0; width: auto; min-width: 0; }
+#memory-list .memory-head { gap: 3px; }
+#memory-list .memory-head input.memory-num { width: 2.8em; padding-left: 2px; padding-right: 2px; }
+#memory-list .memory-head .memory-toggle { width: 1.8em; }
+#memory-list .memory-head .del { padding: 5px 7px !important; margin-left: 0; }
+
+/* 折りたたんでいる間は、詳細の書き出しを1行だけ薄く見せる（押すと開く） */
+.memory-entry .memory-preview { display: none; font-size: .72rem; color: #9a8a8a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 3px; cursor: pointer; }
+.memory-entry.collapsed .memory-preview:not(:empty) { display: block; }
+body.print-mode .memory-preview { display: none !important; }
+
+/* --- 設計図風の印刷（A4縦2枚） --- */
+#sheet-print { display: none; }
+@page { size: A4 portrait; margin: 6mm; }
+@media print {
+  body.sheet-print-mode > *:not(#sheet-print) { display: none !important; }
+  body.sheet-print-mode { background: #fff !important; padding: 0 !important; }
+  body.sheet-print-mode #sheet-print { display: block; color: #000; font-family: sans-serif; font-size: 8.5pt; }
+  .sp-page { page-break-after: always; break-after: page; }
+  .sp-page:last-child { page-break-after: auto; break-after: auto; }
+  .sp-top { display: flex; gap: 6mm; margin-bottom: 3mm; }
+  .sp-left { flex: 1; } .sp-right { width: 52mm; }
+  .sp-title { font-size: 15pt; font-weight: bold; letter-spacing: .1em; border-bottom: 2px solid #000; margin-bottom: 2mm; }
+  .sp-line { display: flex; gap: 2mm; align-items: baseline; border-bottom: 1px solid #000; min-height: 7mm; padding: 1mm 0 0; }
+  .sp-line span { font-size: 6.5pt; color: #333; flex: none; }
+  .sp-line b { font-weight: normal; font-size: 10pt; flex: 1; }
+  .sp-half b { flex: 1 1 0; }
+  .sp-t { width: 100%; border-collapse: collapse; table-layout: fixed; margin: 0; }
+  .sp-t th, .sp-t td { border: 1px solid #000 !important; padding: 0.8mm 1.2mm; vertical-align: middle; word-break: break-all; line-height: 1.25; background: #fff !important; color: #000 !important; }
+  .sp-t thead th { background: #e8e8e8 !important; font-size: 6.5pt; font-weight: bold; }
+  .sp-t tbody tr { height: 6.4mm; break-inside: avoid; }
+  .sp-c { text-align: center; }
+  .sp-class { margin-top: 2mm; } .sp-class th { width: 28mm; background: #222 !important; color: #fff !important; font-size: 8pt; }
+  .sp-stat th { background: #222 !important; color: #fff !important; width: 14mm; } .sp-stat td { text-align: center; font-size: 11pt; font-weight: bold; }
+  .sp-chouai { border: 1px solid #000; text-align: center; margin-top: 2mm; padding: 1mm; font-size: 7pt; } .sp-chouai b { font-size: 11pt; }
+  .sp-body { font-size: 7pt; margin-top: 1.5mm; color: #222; }
+  .sp-sec { margin-top: 3mm; }
+  .sp-bar { background: #222; color: #fff; font-weight: bold; font-size: 10pt; padding: 0.6mm 2mm; display: flex; justify-content: space-between; align-items: baseline; }
+  .sp-bar span { font-size: 7.5pt; font-weight: normal; }
+  .sp-skills th:nth-child(1), .sp-parts th:nth-child(1), .sp-parts th:nth-child(2) { width: 5mm; }
+  .sp-skills th:nth-child(2) { width: 24%; } .sp-skills th:nth-child(3) { width: 12mm; } .sp-skills th:nth-child(4), .sp-skills th:nth-child(5) { width: 10mm; }
+  .sp-parts th:nth-child(3) { width: 26%; } .sp-parts th:nth-child(4) { width: 13mm; } .sp-parts th:nth-child(5), .sp-parts th:nth-child(6) { width: 10mm; }
+  .sp-miren th:nth-child(1), .sp-miren th:nth-child(2) { width: 22%; } .sp-miren th:nth-child(3) { width: 17mm; }
+  .sp-t td { font-size: 8pt; } .sp-parts td:last-child, .sp-skills td:last-child, .sp-t td:last-child { font-size: 7.5pt; }
+  tr.sp-broken td { background: #ddd !important; text-decoration: line-through; }
+  .sp-act { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2mm; }
+  .sp-actbox { background: #222; color: #fff; padding: 2mm 4mm; font-size: 10pt; } .sp-actbox span { font-weight: bold; margin-right: 3mm; } .sp-actbox b { background: #fff; color: #000; padding: 0 3mm; margin: 0 1mm; font-weight: normal; } .sp-big { font-size: 14pt; font-weight: bold !important; }
+  .sp-ps { border: 1px solid #000; padding: 1.5mm 3mm; display: flex; gap: 3mm; align-items: center; font-size: 8pt; } .sp-ps span { font-weight: bold; } .sp-ps i { font-style: normal; }
+}
+@media print {
+  .sp-t td { text-align: left; } .sp-t td.sp-c { text-align: center; }
+  .sp-t tbody tr { height: 6.1mm; }
+  .sp-t th, .sp-t td { padding: 0.5mm 1mm; }
+  .sp-skills th:nth-child(3), .sp-parts th:nth-child(4) { width: 17mm; }
+  .sp-skills th:nth-child(4), .sp-skills th:nth-child(5), .sp-parts th:nth-child(5), .sp-parts th:nth-child(6) { width: 11mm; }
+  .sp-parts th:nth-child(3) { width: 30%; } .sp-skills th:nth-child(2) { width: 22%; }
+  .sp-sec { margin-top: 2.2mm; }
+  .sp-bar { padding: 0.3mm 2mm; font-size: 9pt; }
+}
+
+@media print {
+  /* 1枚目は、記憶のカケラと未練を用紙の一番下に寄せる */
+  .sp-page:first-child .sp-bottom { margin-top: 4mm; }
+}
+
+@media print {
+  /* 2枚目はスキルも入るので、行を少し低くする */
+  .sp-page:nth-child(2) .sp-t tbody tr { height: 4.6mm; }
+  .sp-page:nth-child(2) .sp-t td { font-size: 7.5pt; padding-top: 0.2mm; padding-bottom: 0.2mm; }
+  .sp-page:nth-child(2) .sp-t td:last-child { font-size: 7pt; }
+  .sp-page:nth-child(2) .sp-sec { margin-top: 1.8mm; }
+}
+@media print { .sp-page:first-child .sp-t tbody tr { height: 6.6mm; } }
+
+.print-credit { display: none; }
+@media print {
+  .sp-foot, body.print-mode .print-credit { display: block; text-align: right; font-size: 7pt; color: #333; margin-top: 2mm; }
+}
+
+/* === 見やすさ（損傷/使用済みの強調・戦闘用表示・凡例・配色・表の余白） === */
+/* 損傷：灰色に落とし、左端に赤い印、名前に取り消し線。種別の色より優先する */
+tr.broken td { background: #2c2c2c !important; }
+tr.broken td:first-child { box-shadow: inset 4px 0 0 #c0392b; }
+tr.broken .p-name, tr.broken .skill-name-select { text-decoration: line-through; }
+tr.broken input, tr.broken textarea, tr.broken select { opacity: .55; }
+/* 使用済み：少し暗くして、左端に黄色の印 */
+tr.used td:first-child { box-shadow: inset 4px 0 0 #e0b040; }
+tr.used input:not([type="checkbox"]), tr.used textarea, tr.used select { opacity: .5; }
+
+/* 戦闘用表示：部位の見出しを太く区切り、行動値を大きく */
+body.battle-view .part-header { border-left: 6px solid #e05050; }
+body.battle-view #bar-act { font-size: 1.5rem; }
+
+/* 種別の色の凡例 */
+.cat-legend { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; font-size: .68rem; color: #aaa; margin: -2px 0 6px; }
+.cat-legend .cat-chip { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
+.cat-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; border: 1px solid #777; }
+@media print { .cat-legend { display: none !important; } }
+
+/* 表のゆったり表示 */
+html.table-roomy .maneuver-table th, html.table-roomy .maneuver-table td { padding: 5px 3px; font-size: .8rem; }
+html.table-roomy .maneuver-table input, html.table-roomy .maneuver-table select { font-size: .8rem; padding: 4px 2px; }
+html.table-roomy .maneuver-table textarea { font-size: .8rem; line-height: 1.4; }
+
+/* 配色：明（画面全体の明暗を反転し、写真だけ元に戻す） */
+html.theme-light { filter: invert(1) hue-rotate(180deg); background: #fff; }
+html.theme-light img, html.theme-light video, html.theme-light canvas { filter: invert(1) hue-rotate(180deg); }
+@media print { html.theme-light { filter: none; } }
+.bar-tools { flex-wrap: wrap; }
+
+/* 戦闘用表示：スキルを1画面にたくさん見られるよう、凡例・区分の列を省き、行を詰める */
+body.battle-view .cat-legend { display: none; }
+body.battle-view #sec-skill .maneuver-table th:nth-child(2),
+body.battle-view #sec-skill .maneuver-table tr.skill-row > td:nth-child(2) { display: none; }
+body.battle-view #sec-skill .maneuver-table th { padding: 2px 1px; font-size: .68rem; }
+body.battle-view #sec-skill .maneuver-table td { padding: 1px 2px; }
+body.battle-view #sec-skill .maneuver-table input,
+body.battle-view #sec-skill .maneuver-table select { padding: 1px; font-size: .74rem; }
+body.battle-view #sec-skill .maneuver-table tr.skill-memo-row td { padding: 0 3px 2px; }
+body.battle-view #sec-skill .maneuver-table tr.skill-memo-row textarea { font-size: .7rem; line-height: 1.25; min-height: 0; padding: 0 2px; }
+body.battle-view #sec-skill .title { margin-bottom: 4px; }
+
+/* 記憶のカケラの開閉ボタン：枠なしの細い矢じるし（▾/▸ の文字はやめた） */
+#memory-list .memory-head .memory-toggle { background: transparent; border: none; width: 1.8em; height: 1.8em; padding: 0; position: relative; color: #9a8a8a; }
+#memory-list .memory-head .memory-toggle::before { content: ""; position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: translate(-50%, -70%) rotate(45deg); transition: transform .15s; }
+#memory-list .memory-entry.collapsed .memory-toggle::before { transform: translate(-70%, -50%) rotate(-45deg); }
+
+/* 閲覧用URLで開いたとき：保存・切替・編集切替のボタンと、編集用の部品を出さない */
+body.view-locked .corner-btn, body.view-locked .edit-only, body.view-locked #view-mode-toggle { display: none !important; }
+.view-btn-row { flex-wrap: wrap; }
+.view-btn-row .char-switch-btn { flex: 1 1 28%; }
+
+/* 狂気点：0/4 の形（4/4で赤く） */
+.mad-pt { display: flex; align-items: center; justify-content: center; gap: 2px; min-width: 0; }
+.mad-pt .mad-input { width: 2.4em; min-width: 0; flex: none; text-align: center; padding: 4px 1px; }
+.mad-pt .mad-max { color: #aaa; font-size: .85rem; white-space: nowrap; }
+.mad-pt .mad-step { flex: none; width: 1.7em; height: 1.7em; padding: 0; font-size: .8rem; background: #2a2a32; color: #ddd; border: 1px solid #555; border-radius: 6px; cursor: pointer; line-height: 1; }
+.mad-pt.full .mad-input, .mad-pt.full .mad-max { color: #ff6b6b; font-weight: bold; }
+.mad-pt.full .mad-input { border-color: #c0392b; }
+@media print { .mad-step { display: none !important; } }
+.mad-pt input.mad-input { width: 2.6em !important; min-width: 0; flex: none; text-align: center; padding: 4px 1px; }
+@media (pointer: coarse) { body:not(.view-mode) .mad-pt input.mad-input { font-size: 16px !important; } }
+
+.share-row { display:flex; gap:8px; align-items:center; justify-content:space-between; padding:6px 4px; border-bottom:1px solid #333; }
+.share-info { display:flex; flex-direction:column; min-width:0; }
+.share-info b { font-size:.86rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.share-info span { font-size:.7rem; color:#999; }
+.share-btns { display:flex; gap:6px; flex:none; }
+.share-btns button { padding:4px 8px; font-size:.74rem; white-space:nowrap; }
+
+/* 固定バーの行動値・損傷は、表示画面だけに出す（編集画面では隠す） */
+body:not(.view-mode) .edit-hide { display: none !important; }
+
+/* 戦闘用ON：未練の表もスキルの表と同じように詰める */
+body.battle-view #sec-miren .title { margin-bottom: 4px; }
+body.battle-view #sec-miren table th { padding: 2px 1px; font-size: .68rem; }
+body.battle-view #sec-miren table td { padding: 1px 2px; }
+body.battle-view #sec-miren table input,
+body.battle-view #sec-miren table select { padding: 1px; font-size: .74rem; }
+body.battle-view #sec-miren table textarea { font-size: .7rem; line-height: 1.25; min-height: 0; padding: 0 2px; }
+/* 戦闘用ON：発狂の効果文は、スキルの効果文と同じように、表の幅いっぱいに1行下げて出す */
+body.battle-view .miren-mad-box { flex-wrap: wrap; row-gap: 0; }
+body.battle-view .miren-mad-box .miren-madname { flex: 1 1 0; }
+body.battle-view .miren-mad-box .miren-madeffect { flex: 1 0 100%; padding: 0 3px; }
+body.battle-view .miren-mad-row td { padding: 0 2px 3px; }
