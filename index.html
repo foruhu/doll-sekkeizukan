@@ -13,7 +13,7 @@
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="ドール設計図館｜ネクロニカ用 非公式キャラクターシート作成・保管ツール">
 <meta name="twitter:description" content="『永い後日談のネクロニカ』用 非公式キャラクターシート作成・保管ツール。スマホ対応。">
-<link rel="stylesheet" href="style.css?v=127">
+<link rel="stylesheet" href="style.css?v=133">
 </head>
 <body>
 
@@ -591,7 +591,7 @@
     <h4 style="color:#8ff; margin:12px 0 4px;">■ 共有・バックアップ</h4>
     <ul style="margin:0; padding-left:1.2em;">
       <li>「共有URLを作成」(出力・共有の中): 相手が開くとキャラが読み込まれます。上のバーの「閲覧用URL」: 相手の画面に表示するだけのリンクで、開いた人は編集に切り替えられません(損傷・使用のチェックだけ操作でき、保存もされません)。開いた直後は全項目が表示され、「戦闘用」で絞り込めます。</li>
-      <li>共有URL・閲覧用URLを作ると、キャラのデータが外部のデータベースに保存されます(URLを知っている人だけが見られます)。接続できない時は、データをURLに埋め込む方式に自動で切り替わります。</li>
+      <li>共有URL・閲覧用URLを作るときは、「サーバーに保存する(短いURL)」か「サーバーに保存しない(長いURL)」かを選べます。サーバーに保存する場合は、キャラのデータが外部のデータベースに保存されます(URLを知っている人だけが見られます)。保存できなかったときは理由が出て、長いURLにするかどうか確認されます。</li>
       <li>「🔗 発行した共有URLの控え」(出力・共有の中)に、この端末で作った共有URL・閲覧用URLが並び、「コピー」でもう一度URLを取り出せます。URLを作る前に、保存する・しないを選ぶ画面が出ます（控えに並ぶのは、サーバーに保存したURLだけです）。以前作ったURLは「URLを貼って加える」で控えに入れられます。</li>
       <li>「JSON出力」は、ファイルで別端末に移す方法です。上のバーの「🎲 ココフォリアコマ」で駒用のデータを、「💬 チャパレ」でチャットパレットに貼る文章をコピーできます(コマのメモ欄には名前・クラス・行動値・記憶のかけら・部位ごとのパーツ名が、ステータス欄には行動値・「○○への未練」ごとの狂気点(0〜4)と、「せぼね」など貯めて使うパーツのストック欄(0/0)が入ります。チャパレは先頭に判定コマンド、続けてポジション・クラスのスキルと頭・腕・胴・脚のマニューバが「【名前】\n《T:タイミング／C:コスト／R:射程》\n効果」の形で並び、攻撃マニューバには行頭に 1na が付きます。ココフォリアのルームのシステムは「ネクロニカ」にしてください)。</li>
       <li>「全キャラをバックアップ」で、保存済みの全キャラを1つのファイルに書き出せます。ブラウザのデータが消えた時や機種変更の保険として、時々取っておくのがおすすめです。最後に取ってからの日数が、キャラクター管理に表示されます(14日以上たつと色が変わります)。</li>
@@ -601,10 +601,19 @@
 
     <h4 style="color:#8ff; margin:12px 0 4px;">■ ライセンス・権利表記</h4>
     <p style="margin:0;">本ツールは『永い後日談のネクロニカ』の二次創作・ファンツールです。無料・非営利で公開しており、公式とは関係ありません。</p>
-    <p style="margin:6px 0 0;">『永い後日談のネクロニカ』 Copyright © 2011 Patch Works / Copyright © 2011 Kamiya Ryo / Tsugihagi honpo All Rights Reserved.</p>
+    <p style="margin:6px 0 0;">本作は、「神谷涼」「インコグ・ラボ」が権利を有する『永い後日談のネクロニカ』の二次創作物です。</p>
     <p style="margin:6px 0 0;">権利者の方からの削除・修正のご要請があった場合は、速やかに対応します。ご連絡は、X（旧Twitter）の「ドール設計図館」（@dollsekkeizukan）からお願いします。</p>
     <p style="margin:6px 0 0;">不具合報告・更新情報：X @dollsekkeizukan（<a href="https://x.com/dollsekkeizukan" target="_blank" rel="noopener">https://x.com/dollsekkeizukan</a>）</p>
-    <p style="margin:6px 0 0;">本ツールの制作には、AIアシスタント Claude（Anthropic）の支援を受けています。</p>
+    <p style="margin:6px 0 0;">本ツールの制作には、AIアシスタント Claude（Anthropic）を使用しています。</p>
+
+    <h4 style="color:#8ff; margin:12px 0 4px;">■ 更新履歴</h4>
+    <ul style="margin:0; padding-left:1.2em;">
+      <li>2026/11/09 ココフォリアのコマ：ステータスに「狂気上限」(記憶のカケラの数)を追加しました。</li>
+      <li>2026/11/10 ココフォリアのコマ：せぼねの欄を、いちばん下にしました。</li>
+      <li>2026/11/10 コマのメモ：先頭を「PC / PL」の表記にして、享年・初期配置・外見を追加しました。</li>
+      <li>2026/11/10 コマのメモとチャットパレット：「✅使用済み／❌損傷済み」のコピペ用の行を追加しました。損傷済みのパーツには、名前の前に❌が付きます。</li>
+      <li>2026/11/10 パーツ・スキルのコストと射程の「無し」を「なし」にそろえました(入力した「無し」は、そのまま残ります)。</li>
+    </ul>
   </div>
 </div>
 
@@ -622,16 +631,16 @@
   </div>
 </div>
 
-<script src="data.js?v=127"></script>
-<script src="app-core.js?v=127"></script>
-<script src="app-parts.js?v=127"></script>
-<script src="app-skills.js?v=127"></script>
-<script src="app-save.js?v=127"></script>
-<script src="app-dict.js?v=127"></script>
-<script src="app-image.js?v=127"></script>
-<script src="app-look.js?v=127"></script>
-<script src="app-sheetprint.js?v=127"></script>
-<script src="app-share.js?v=127"></script>
-<script src="app-main.js?v=127"></script>
+<script src="data.js?v=133"></script>
+<script src="app-core.js?v=133"></script>
+<script src="app-parts.js?v=133"></script>
+<script src="app-skills.js?v=133"></script>
+<script src="app-save.js?v=133"></script>
+<script src="app-dict.js?v=133"></script>
+<script src="app-image.js?v=133"></script>
+<script src="app-look.js?v=133"></script>
+<script src="app-sheetprint.js?v=133"></script>
+<script src="app-share.js?v=133"></script>
+<script src="app-main.js?v=133"></script>
 </body>
 </html>
