@@ -17,7 +17,9 @@ function buildCcfoliaCommandLines(data) {
   const one = t => String(t || '').replace(/\s*\n\s*/g, ' ').trim();
   const body = (x, prefix) => {
     const spec = `《T:${x.timing || ''}／C:${x.cost || ''}／R:${x.range || ''}》`;
-    return `${prefix ? prefix + ' ' : ''}【${x.name}】\\n${spec}\\n${one(x.memo)}`;
+    // 損傷しているパーツは、名前の前に ❌ を付ける（攻撃の 1na は先頭のまま）
+    const mark = x.isBroken ? '❌' : '';
+    return `${prefix ? prefix + ' ' : ''}${mark}【${x.name}】\\n${spec}\\n${one(x.memo)}`;
   };
   const attackPrefix = p => {
     const memo = one(p.memo);
@@ -25,7 +27,8 @@ function buildCcfoliaCommandLines(data) {
     const m = memo.match(/出目\+(\d+)/);
     return m ? `1na+${m[1]}` : '1na';
   };
-  const lines = ['nm 【未練決定】', '1nc 【対話判定】', '1nc 【狂気判定】', '1nc 【行動判定】'];
+  // 4行目のあとに、✅❌をコピーするための行を1つ置く（パレットを編集するとき、ここからコピーして行の頭に貼る）
+  const lines = ['nm 【未練決定】', '1nc 【対話判定】', '1nc 【狂気判定】', '1nc 【行動判定】', '✅使用済み／❌損傷済み'];
   const skills = (data.skills || []).filter(x => x.name);
   const skillsOf = c => c ? skills.filter(x => x.category === c) : [];
   const section = (label, arr, isPart) => {
@@ -98,8 +101,11 @@ function exportCcfolia() {
   const memTexts = (data.memories || []).map(memoryToText).filter(Boolean);
   if (memTexts.length) memTexts.forEach(t => memoLines.push(t)); else memoLines.push('記憶のカケラなし');
   memoLines.push('');
-  const names = arr => arr.filter(x => x.name).map(x => `【${x.name}】`).join('');
+  // 損傷しているパーツは、名前の前に ❌ を付ける
+  const names = arr => arr.filter(x => x.name).map(x => `${x.isBroken ? '❌' : ''}【${x.name}】`).join('');
   const skillsOf = c => c ? (data.skills || []).filter(x => x.category === c) : [];
+  // ✅❌をコピーするための行（メモを編集するとき、ここからコピーして貼る）。マニューバの一覧のすぐ上に置く
+  memoLines.push('✅使用済み／❌損傷済み');
   memoLines.push(`--ポジション--${names(skillsOf(data.pos))}`);
   memoLines.push(`--メインクラス--${names(skillsOf(data.mc))}`);
   memoLines.push(`--サブクラス--${names(skillsOf(data.sc))}`);
