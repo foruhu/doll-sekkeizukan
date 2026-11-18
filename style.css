@@ -80,7 +80,7 @@ body.view-mode .edit-only { display: none !important; }
 .view-only { display: none; }
 body.view-mode .view-only { display: block; }
 body:not(.view-mode) #view-mode-image-container { display: none !important; }
-#view-mode-image-container img { max-width: 100%; max-height: 280px; display: block; margin: 0 auto 10px auto; border-radius: 8px; border: 1.5px solid #8b0000; object-fit: cover; }
+#view-mode-image-container img { max-width: 100%; max-height: 280px; display: block; margin: 0 auto 10px auto; border-radius: 8px; border: 1.5px solid #8b0000; object-fit: cover; background: var(--img-bg, transparent); }
 body.view-mode .del { display: none !important; }
 body.view-mode .color-col { display: none !important; }
 body.view-mode .col-op { display: none !important; }
@@ -471,7 +471,7 @@ body.battle-view .miren-mad-row td { padding: 0 2px 3px; }
 .img-panel-head { font-size: .9rem; font-weight: bold; margin-bottom: 6px; }
 .img-panel-head span { font-weight: normal; font-size: .78rem; color: #999; }
 .img-panel-list { display: flex; flex-wrap: wrap; gap: 8px; }
-.img-thumb { position: relative; width: 72px; height: 72px; padding: 0; border: 2px solid #555; border-radius: 8px; background: #222228; overflow: hidden; cursor: pointer; }
+.img-thumb { position: relative; width: 72px; height: 72px; padding: 0; border: 2px solid #555; border-radius: 8px; background: var(--img-bg, #222228); overflow: hidden; cursor: pointer; }
 .img-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .img-thumb.main { border-color: #e0a040; }
 .img-badge { position: absolute; left: 0; bottom: 0; right: 0; font-size: .62rem; line-height: 1.4; background: rgba(0,0,0,.65); color: #fff; text-align: center; }
@@ -485,3 +485,21 @@ body.battle-view .miren-mad-row td { padding: 0 2px 3px; }
 .vm-thumbs img { width: 44px; height: 44px; object-fit: cover; border-radius: 6px; border: 1.5px solid #555; opacity: .65; cursor: pointer; }
 .vm-thumbs img.on { border-color: #e0a040; opacity: 1; }
 @media print { #image-panel, .vm-thumbs { display: none !important; } }
+
+.img-bg-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; font-size: .8rem; }
+.img-bg-row input[type=color] { width: 44px; height: 28px; padding: 0; }
+
+/* パソコン幅：左下の固定ボタン（保存・切替・表示）が内容に重ならないよう、左右に専用の余白をあける（右はREADMEボタン用） */
+@media screen and (min-width: 900px) {
+  body { padding-left: 124px; padding-right: 138px; }
+}
+
+/* 戦闘用ボタン：ON（絞り込み中）は赤く塗りつぶし、OFFは灰色の枠だけにして、状態が一目で分かるようにする */
+#battle-toggle.on { background: #7a1f1f; color: #fff; border: 2px solid #ff6a6a; font-weight: bold; }
+#battle-toggle.off { background: transparent; color: #999; border: 1px dashed #666; font-weight: normal; }
+
+/* チャパレ編集画面は、表示モードでも文字を編集できるようにする */
+body.view-mode #cp-text { pointer-events: auto !important; background: #fff !important; border-color: #999 !important; }
+
+/* ココフォリアコマの編集画面も、表示モードで入力できるようにする */
+body.view-mode #ccf-modal input, body.view-mode #ccf-modal textarea { pointer-events: auto !important; background: #fff !important; border-color: #999 !important; }
