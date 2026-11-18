@@ -140,12 +140,21 @@ function buildCcfoliaPiece(data, useSaved) {
   return ccfoliaData;
 }
 
+// チャパレ・コマの編集画面：同時に1つだけ開き、Escキーでも閉じられるようにする
+function closeEditModals() {
+  document.querySelectorAll('#cp-modal, #ccf-modal').forEach(e => e.remove());
+}
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && document.querySelector('#cp-modal, #ccf-modal')) closeEditModals();
+});
+
 // 「🎲 ココフォリアコマ」：メモ欄とステータスを編集してからコピーできる。「この内容を保存」でキャラクターに残る
 function exportCcfolia() {
   const data = getFullData();
   const piece = buildCcfoliaPiece(data, true);
   const isLocked = document.body.classList.contains('view-locked');
   const hasSaved = !!((data.ccfoliaMemo && data.ccfoliaMemo.trim()) || Array.isArray(data.ccfoliaStatus) || data.ccfoliaExtra);
+  closeEditModals();
   const ov = document.createElement('div');
   ov.id = 'ccf-modal';
   ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:12px;';
@@ -170,7 +179,7 @@ function exportCcfolia() {
     <div><button type="button" data-k="addfa" style="${btn}">＋ 差分を追加</button></div>
     <div style="font-size:.72rem;color:#777;">※画像は、インターネット上のURLで指定します。この画面の画像（端末に保存したもの）は使えません。</div>
     <div style="font-weight:bold;">メモ欄</div>
-    <textarea id="ccf-memo" spellcheck="false" style="${inp}width:100%;min-height:200px;height:34vh;font-family:monospace;font-size:.82rem;line-height:1.5;white-space:pre;overflow:auto;"></textarea>
+    <textarea id="ccf-memo" spellcheck="false" style="${inp}width:100%;min-height:200px;height:34vh;font-family:Consolas,'Courier New',Menlo,monospace;font-size:.82rem;line-height:1.5;white-space:pre;overflow:auto;"></textarea>
     <div style="display:flex;flex-wrap:wrap;gap:6px;">
       <button type="button" data-k="copy" style="${btn}background:#e6f4ea;border-color:#2e8a6a;font-weight:bold;">📋 コピー</button>
       ${isLocked ? '' : `<button type="button" data-k="save" style="${btn}">💾 この内容を保存</button>
@@ -601,8 +610,13 @@ function applyLoadedShareData(data, isViewOnly) {
     // 送信側で設定されていたサムネイル画像があれば、閲覧画面の上部に表示する
     const imageContainer = document.getElementById('view-mode-image-container');
     if (imageContainer) {
-      if (data.shareImage) {
-        imageContainer.innerHTML = `<img src="${data.shareImage}" alt="">`;
+      const shareSrc = safeImageSrc(data.shareImage);
+      if (shareSrc) {
+        imageContainer.innerHTML = '';
+        const im = document.createElement('img');
+        im.src = shareSrc;
+        im.alt = '';
+        imageContainer.appendChild(im);
         imageContainer.style.display = '';
       } else {
         imageContainer.innerHTML = '';
@@ -718,6 +732,7 @@ function hkParseMirenRow(text) {
 
 // テキストを解析する（画面には触らない）
 function parseHokanshoText(raw) {
+  raw = fixKnownTyposInString(String(raw || ''));
   const r = {
     fields: {}, memories: [], list: [], skills: [], parts: [],
     enhanceLines: [], enhance: {}, madnessNotes: [], unrecognized: [], recognized: 0,
@@ -1278,16 +1293,20 @@ function exportChatPalette() {
   const data = getFullData();
   const hasSaved = !!(data.chatPalette && data.chatPalette.trim());
   const isView = document.body.classList.contains('view-locked'); // 閲覧用URLで開いたときだけ、保存できない
+  closeEditModals();
   const ov = document.createElement('div');
+  ov.id = 'cp-modal';
   ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:12px;';
   const box = document.createElement('div');
   box.style.cssText = 'background:#fff;color:#222;max-width:640px;width:100%;border-radius:10px;padding:14px;font-size:.84rem;line-height:1.6;max-height:94vh;display:flex;flex-direction:column;gap:8px;';
   const btn = 'padding:8px 12px;border:1px solid #888;border-radius:8px;background:#f4f4f4;color:#222;font-size:.84rem;cursor:pointer;';
   box.innerHTML = `<div style="font-weight:bold;font-size:.95rem;">チャットパレットの編集</div>
     <div id="cp-note" style="font-size:.76rem;color:#555;"></div>
-    <textarea id="cp-text" spellcheck="false" style="width:100%;flex:1 1 auto;min-height:240px;height:48vh;box-sizing:border-box;font-family:monospace;font-size:.82rem;line-height:1.5;white-space:pre;overflow:auto;border:1px solid #999;border-radius:6px;padding:6px;color:#222;background:#fff;"></textarea>
+    <textarea id="cp-text" spellcheck="false" style="width:100%;flex:1 1 auto;min-height:240px;height:48vh;box-sizing:border-box;font-family:Consolas,'Courier New',Menlo,monospace;font-size:.82rem;line-height:1.5;white-space:pre;overflow:auto;border:1px solid #999;border-radius:6px;padding:6px;color:#222;background:#fff;"></textarea>
+    <div style="font-size:.74rem;color:#555;background:#f4f4f4;border-radius:6px;padding:6px 8px;">「<span style="font-family:Consolas,'Courier New',Menlo,monospace;">\\n</span>」は、ココフォリアで<b>改行</b>として使われる記号です。このまま貼ると、発言したときに【名前】・《タイミング／コスト／射程》・効果が、1行ずつ改行されて表示されます。「「<span style="font-family:Consolas,'Courier New',Menlo,monospace;">\\n</span>」なしでコピー」を使うと、「<span style="font-family:Consolas,'Courier New',Menlo,monospace;">\\n</span>」が半角スペースになり、1行で表示されます（ココフォリアで改行が効かないときなどに使います）。</div>
     <div style="display:flex;flex-wrap:wrap;gap:6px;">
       <button type="button" data-k="copy" style="${btn}background:#e6f4ea;border-color:#2e8a6a;font-weight:bold;">📋 コピー</button>
+      <button type="button" data-k="copy2" style="${btn}background:#e6f4ea;border-color:#2e8a6a;">📋 「<span style="font-family:Consolas,'Courier New',Menlo,monospace;">\\n</span>」なしでコピー</button>
       ${isView ? '' : `<button type="button" data-k="save" style="${btn}">💾 この内容を保存</button>
       <button type="button" data-k="reset" style="${btn}">自動生成に戻す</button>`}
       <button type="button" data-k="close" style="${btn}margin-left:auto;">閉じる</button>
@@ -1304,9 +1323,10 @@ function exportChatPalette() {
       : '今のキャラクターから自動で作った内容です。自由に書き換えられます。') + (extra || '');
   };
   setNote();
-  const copy = () => {
-    const text = ta.value;
-    const done = () => { note.textContent = 'コピーしました。ココフォリアのキャラクター編集画面の「チャットパレット」欄に貼り付けてください。'; };
+  const copy = (noNl) => {
+    // 「\\n」なし：文章中の「\\n」(改行の記号)を、半角スペースに置き換えてコピーする（編集欄の内容は変えない）
+    const text = noNl ? ta.value.replace(/\\n/g, ' ') : ta.value;
+    const done = () => { note.textContent = (noNl ? '改行の記号を半角スペースに置き換えてコピーしました。' : 'コピーしました。') + 'ココフォリアのキャラクター編集画面の「チャットパレット」欄に貼り付けてください。'; };
     const fallback = () => { ta.focus(); ta.select(); try { document.execCommand('copy'); done(); } catch (e) { note.textContent = '自動コピーに失敗しました。文章を選択して、手動でコピーしてください。'; } };
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done).catch(fallback);
     else fallback();
@@ -1314,7 +1334,8 @@ function exportChatPalette() {
   box.addEventListener('click', (e) => {
     const k = e.target && e.target.getAttribute && e.target.getAttribute('data-k');
     if (!k) return;
-    if (k === 'copy') copy();
+    if (k === 'copy') copy(false);
+    else if (k === 'copy2') copy(true);
     else if (k === 'save') {
       const h = document.getElementById('chat-palette-custom');
       if (h) { h.value = ta.value; h.dispatchEvent(new Event('input', { bubbles: true })); }
@@ -1385,8 +1406,8 @@ function renderShareList() {
     return `<div class="share-row">
       <div class="share-info"><b>${escapeHtml(x.name)}</b><span>${x.viewOnly ? '閲覧用' : '編集可'} ・ ${ds}</span></div>
       <div class="share-btns">
-        <button type="button" class="sec" onclick="copyShareURL('${x.token}')">コピー</button>
-        <button type="button" class="sec" onclick="removeShareRecord('${x.token}')">控えを消す</button>
+        <button type="button" class="sec" data-token="${escapeHtml(x.token)}" onclick="copyShareURL(this.dataset.token)">コピー</button>
+        <button type="button" class="sec" data-token="${escapeHtml(x.token)}" onclick="removeShareRecord(this.dataset.token)">控えを消す</button>
       </div></div>`;
   }).join('');
 }
