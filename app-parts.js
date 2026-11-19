@@ -34,7 +34,8 @@ function detectCategoryFromMemo(memoText) {
 
 function buildCategoryOptions(selected) {
   return MANEUVER_CATEGORIES.map(c =>
-    `<option value="${c}" ${c === selected ? 'selected' : ''}>${c || '（未選択）'}</option>`
+    // 選択肢の一覧でも、行に付くのと同じ色で見えるようにする（色が無い「未選択」は、既定の白）
+    `<option value="${c}" ${c === selected ? 'selected' : ''}${MANEUVER_CATEGORY_COLORS[c] ? ` style="background:${MANEUVER_CATEGORY_COLORS[c]};color:#fff;"` : ''}>${c || '（未選択）'}</option>`
   ).join('');
 }
 
@@ -122,15 +123,20 @@ function getLimitByVal(val) {
 // オプションのHTML生成用ヘルパー関数（重複防止・共通化）
 function generateOptionGroup(list, remainingMap, prefix, label) {
   let groupHtml = '';
+  let memos = [];
+  try { memos = (typeof chouaiMemoList === 'function') ? chouaiMemoList() : []; } catch (e) { memos = []; }
   list.forEach((p, idx) => {
     const remaining = remainingMap[p.type]?.[p.level] ?? 0;
     const isExists = isPartAlreadyExists(p.name);
+    // 「寵愛点の使い道」に名前が書いてあるパーツは、そのレベルの枠がいっぱいでも出す(寵で取るので、上限を超えて足せる)
+    let inUses = false;
+    try { inUses = !isExists && memos.length > 0 && typeof chouaiNameHit === 'function' && chouaiNameHit(p.name, memos); } catch (e) { inUses = false; }
 
-    // 種別・レベルの上限に達している（かつ未配置の）パーツは一覧に出さない
-    if (remaining <= 0 && !isExists) return;
+    // 種別・レベルの上限に達している（かつ未配置の）パーツは一覧に出さない(使い道に書いてあるものは除く)
+    if (remaining <= 0 && !isExists && !inUses) return;
 
     const disabledAttr = isExists ? 'disabled' : '';
-    const nameText = isExists ? `${p.name} (選択済み)` : p.name;
+    const nameText = isExists ? `${p.name} (選択済み)` : (remaining <= 0 && inUses ? `${p.name} (使い道に記載)` : p.name);
     groupHtml += `<option value="${prefix}_${idx}" ${disabledAttr}>[${p.type} Lv${p.level}] ${nameText}</option>`;
   });
   return groupHtml ? `<optgroup label="${label}">${groupHtml}</optgroup>` : '';
@@ -196,6 +202,17 @@ function updateExtraPartOptions() {
 
     optionsHtml += `<option value="custom">-- 自由入力枠を追加 --</option>`;
     selectElem.innerHTML = optionsHtml;
+    // 「シナリオ中に獲得」用の選択欄：同じ中身。獲得したものは上限を超えて足せるので、残り枠による選べない表示はしない
+    try {
+      const acqSel = secDiv.querySelector('.acq-select');
+      if (acqSel) {
+        const freeMap = { '武装': { 1: 99, 2: 99, 3: 99 }, '変異': { 1: 99, 2: 99, 3: 99 }, '改造': { 1: 99, 2: 99, 3: 99 } };
+        let o2 = `<option value="">+ 【${sec.title}】にシナリオ獲得を追加...</option><option value="custom">-- 自由枠を追加(自分で書く) --</option>`;
+        if (EXTRA_PARTS_DB[sec.id]) o2 += generateOptionGroup(EXTRA_PARTS_DB[sec.id], freeMap, sec.id, `【${sec.title}専用パーツ】`);
+        if (COMMON_EXTRA_PARTS.length > 0) o2 += generateOptionGroup(COMMON_EXTRA_PARTS, freeMap, 'common', '【共通・汎用パーツ】');
+        acqSel.innerHTML = o2;
+      }
+    } catch (e) { /* 獲得用の選択欄を作れなくても、ふつうの追加欄は使える */ }
   });
 }
 
@@ -224,8 +241,8 @@ function renderPartsContainer() {
             <tr>
               <th style="width:5%;">損</th><th style="width:5%;">使</th><th style="width:6%;" class="color-col">色</th><th style="width:11%;">配置部位</th>
               <th style="width:18%;">パーツ名</th><th style="width:9%;">分類</th>
-              <th style="width:6%;">Lv</th><th style="width:14%;">タイミング</th>
-              <th style="width:8%;">コスト</th><th style="width:8%;">射程</th>
+              <th style="width:6%;">Lv</th><th style="width:15%;">タイミング</th>
+              <th style="width:8%;">コスト</th><th style="width:7%;">射程</th>
               <th style="width:9%;" class="col-op">操作</th>
             </tr>
           </thead>
@@ -235,6 +252,9 @@ function renderPartsContainer() {
       <div style="margin-top:6px;">
         <select class="add-part-select edit-only" onchange="onExtraPartSelect('${sec.id}', this)">
           <option value="">+ 【${sec.title}】にパーツを選択して追加...</option>
+        </select>
+        <select class="add-part-select acq-select edit-only" onchange="onExtraPartSelect('${sec.id}', this, true)" title="シナリオ中に獲得したパーツを足します。最初から「獲得」の印が付き、上限が1増えます">
+          <option value="">+ 【${sec.title}】にシナリオ獲得を追加...</option>
         </select>
       </div>
     `;
@@ -307,9 +327,16 @@ function toggleAllMemoryDetails() {
 }
 
 // 「記憶のカケラ」の1枠（数字・名前・詳細＋削除）を作成する
-function addMemoryEntry(value = '') {
+// 記憶のカケラは、最大6個まで。「枠を追加」ボタンからの追加だけを止める（保存済みデータ・読み込み・取り込みでは、すでに6個を超えていても、削らずにそのまま読み込む）
+const MEMORY_MAX = 6;
+function addMemoryEntry(value = '', force = false) {
   const container = document.getElementById('memory-list');
   if (!container) return;
+  if (!force && container.querySelectorAll('.memory-entry').length >= MEMORY_MAX) {
+    if (typeof showToast === 'function') showToast('⚠ 記憶のカケラは最大' + MEMORY_MAX + '個までです');
+    else alert('記憶のカケラは最大' + MEMORY_MAX + '個までです');
+    return;
+  }
   const m = normalizeMemory(value);
 
   const row = document.createElement('div');
@@ -389,7 +416,7 @@ function placeTreasureEntry(button) {
   alert(`「${name}」を${location}のパーツとして配置しました`);
 }
 
-function onExtraPartSelect(secId, selectElem) {
+function onExtraPartSelect(secId, selectElem, acquired) {
   const val = selectElem.value;
   if (!val) return;
 
@@ -400,7 +427,7 @@ function onExtraPartSelect(secId, selectElem) {
   let partData = null;
 
   if (val === 'custom') {
-    partData = { name: '新規パーツ', type: '武装', level: 1, timing: 'アクション', cost: '1', range: '0', memo: '', isEditable: true };
+    partData = { name: '新規パーツ', type: '武装', level: 1, timing: '', cost: '', range: '', memo: '', isEditable: true }; // 自由枠は、分類は武装・Lv1(元の値)、タイミング・射程は未選択、コストは空にする
   } else if (val.startsWith('common_')) {
     const p = COMMON_EXTRA_PARTS[parseInt(val.split('_')[1], 10)];
     if (p) partData = { ...p, memo: p.memo || '', isEditable: false };
@@ -421,10 +448,85 @@ function onExtraPartSelect(secId, selectElem) {
       return;
     }
     addPartRow(tbody, partData.name, partData.type, partData.level, partData.timing, partData.cost, partData.range, partData.memo, partData.isEditable, currentLocName, detectCategoryFromMemo(partData.memo));
+    if (acquired) { // 「シナリオ中に獲得」の選択欄から足したときは、足したパーツに「獲得」の印を付ける(基本・たからものは対象外)
+      try {
+        const rows = tbody.querySelectorAll('tr.part-row');
+        const last = rows[rows.length - 1];
+        if (last && last.querySelector('.other-btn') && !last.classList.contains('no-chouai')) { last.classList.add('other-acq'); last.classList.remove('chouai-acq'); calcTotals(); }
+      } catch (e) { /* 印が付けられなくても、パーツは足されている(あとから「獲得」ボタンで付けられる) */ }
+    }
   }
   selectElem.value = '';
 }
 
+// 射程は「0・なし・自身」から選ぶ。それ以外(「0〜1」など)は「自由枠」を選んで、自分で書く。
+// 値は、(見えない時もある)文字欄に入れておき、保存や読み込みは今までどおり、その文字欄を見る
+const RANGE_PRESETS = ['0', 'なし', '自身'];
+// 枠は1つだけ見せる：ふだんは選択欄、「自由枠」を選ぶ(または「0〜1」など自由な値が入っている)と、文字欄に切り替わる。
+// 文字欄を空にして、枠の外を押すと、選択欄に戻る
+function buildRangeCellHtml(inputClass, value, locked = false) {
+  const v = (value === undefined || value === null) ? '' : String(value);
+  const free = v !== '' && !RANGE_PRESETS.includes(v);
+  const opt = (val, label, sel) => `<option value="${escapeHtml(val)}" ${sel ? 'selected' : ''}>${escapeHtml(label)}</option>`;
+  const options = opt('', '－', v === '') + RANGE_PRESETS.map(p => opt(p, p, v === p)).join('') + opt('自由枠', '自由枠', free);
+  return `<select class="range-sel" ${locked ? 'disabled' : ''} style="${free ? 'display:none;' : ''}" onchange="onRangeSelChange(this)">${options}</select><input type="text" class="${inputClass}" value="${escapeHtml(v)}" placeholder="射程" ${locked ? 'readonly' : ''} onblur="onRangeFreeBlur(this)" style="${free ? '' : 'display:none;'}">`;
+}
+function onRangeSelChange(sel) {
+  const inp = sel.parentElement && sel.parentElement.querySelector('input[type="text"]');
+  if (!inp) return;
+  if (sel.value === '自由枠') {
+    inp.value = '';
+    sel.style.display = 'none';
+    inp.style.display = '';
+    try { inp.focus(); } catch (e) {}
+  } else {
+    inp.value = sel.value;
+  }
+  inp.dispatchEvent(new Event('change', { bubbles: true })); // 効果の記憶・編集の記録などに、変更を伝える
+}
+// 自由枠の文字欄が空のまま枠の外を押したら、選択欄に戻す
+function onRangeFreeBlur(inp) {
+  if (!inp || inp.readOnly || (inp.value || '').trim() !== '') return;
+  inp.value = '';
+  syncRangeSelect(inp);
+}
+// 文字欄の値を、プログラムから書き換えたあと、選択欄の表示を合わせる
+function syncRangeSelect(inp) {
+  const sel = inp && inp.parentElement && inp.parentElement.querySelector('select.range-sel');
+  if (!sel) return;
+  const v = inp.value || '';
+  const free = v !== '' && !RANGE_PRESETS.includes(v);
+  sel.value = free ? '自由枠' : v;
+  sel.style.display = free ? 'none' : '';
+  inp.style.display = free ? '' : 'none';
+}
+
+// レベルは1・2・3から選ぶ(保存データにそれ以外の値があっても、選択肢に加えて失わない)
+function buildLevelOptionsHtml(selected) {
+  const cur = String(selected === undefined || selected === null || selected === '' ? '1' : selected);
+  const list = ['1', '2', '3'];
+  if (!list.includes(cur)) list.push(cur);
+  return list.map(v => `<option value="${escapeHtml(v)}" ${v === cur ? 'selected' : ''}>${escapeHtml(v)}</option>`).join('');
+}
+
+// 一覧にあるが、効果が書かれていないパーツ(タイミング・コスト・射程が空のもの)は、分類・Lv・タイミング・コスト・射程を自分で書けるようにする(名前は変えられない)
+function isEffectlessListedPart(name) {
+  try {
+    const all = [].concat(...Object.values(typeof EXTRA_PARTS_DB !== 'undefined' ? EXTRA_PARTS_DB : {}), typeof COMMON_EXTRA_PARTS !== 'undefined' ? COMMON_EXTRA_PARTS : []);
+    const p = all.find(x => x && x.name === name);
+    return !!(p && !p.memo && !p.timing && !p.cost && !p.range);
+  } catch (e) { return false; }
+}
+function unlockEffectlessPart(tr, name, isEditable) {
+  try {
+    if (isEditable || !isEffectlessListedPart(name)) return;
+    ['.p-type', '.p-level', '.p-timing'].forEach(s => { const e = tr.querySelector(s); if (e) e.disabled = false; });
+    ['.p-cost', '.p-range'].forEach(s => { const e = tr.querySelector(s); if (e) { e.readOnly = false; e.disabled = false; } });
+    tr.querySelectorAll('.range-sel').forEach(e => { e.disabled = false; });
+    tr.querySelectorAll('.p-timing option[value=""], .range-sel option[value=""]').forEach(o => { o.textContent = '（未選択）'; }); // 空の選択肢は、「－」ではなく「（未選択）」と表示する
+    tr.classList.add('effectless-part');
+  } catch (e) { /* 書けるようにできなくても、パーツは足される */ }
+}
 function addPartRow(tbody, name, type, level, timing, cost, range, memo, isEditable, defaultLoc = '頭部', tag = '') {
   const tr = document.createElement('tr');
   tr.className = 'part-row';
@@ -442,16 +544,20 @@ function addPartRow(tbody, name, type, level, timing, cost, range, memo, isEdita
     <td><input type="text" value="${escapeHtml(name)}" class="p-name" ${readOnlyAttr}></td>
     <td>
       <select class="p-type" ${disabledAttr} onchange="calcTotals()">
-        ${['基本','武装','変異','改造','たからもの'].map(t => `<option ${type===t?'selected':''}>${t}</option>`).join('')}
+        ${type === '' ? '<option value="" selected>（未選択）</option>' : ''}${['基本','武装','変異','改造','たからもの'].map(t => `<option ${type===t?'selected':''}>${t}</option>`).join('')}
       </select>
     </td>
-    <td><input type="number" value="${escapeHtml(level)}" min="1" max="3" class="p-level" ${disabledAttr} onchange="calcTotals()"></td>
-    <td><input type="text" value="${escapeHtml(timing)}" class="p-timing" ${readOnlyAttr} oninput="updatePartUsedCheckboxVisibility(this.closest('tr'))"></td>
+    <td><select class="p-level" ${disabledAttr} onchange="calcTotals()">${buildLevelOptionsHtml(level)}</select></td>
+    <td><select class="p-timing" ${disabledAttr} onchange="updatePartUsedCheckboxVisibility(this.closest('tr'))">${buildTimingOptionsHtml(timing)}</select></td>
     <td><input type="text" value="${escapeHtml(cost)}" class="p-cost" ${readOnlyAttr}></td>
-    <td><input type="text" value="${escapeHtml(range)}" class="p-range" ${readOnlyAttr}></td>
-    <td class="col-op"><button type="button" class="del" onclick="removeRowWithUndo(this, calcTotals)">X</button></td>
+    <td>${buildRangeCellHtml('p-range', range, !isEditable)}</td>
+    <td class="col-op"><span class="op-stack"><button type="button" class="chouai-btn" title="押すと「寵愛点で取得した」印が付きます(金色になります)。もう一度押すと外れます" onclick="toggleChouaiAcq(this)">寵</button><button type="button" class="other-btn" title="押すと「シナリオ中に獲得した」印が付きます(青緑になります)。寵愛点は使わず、上限だけ1増えます。もう一度押すと外れます" onclick="toggleOtherAcq(this)">獲得</button><button type="button" class="del" onclick="removeRowWithUndo(this, calcTotals)">X</button></span></td>
   `;
   tbody.appendChild(tr);
+  unlockEffectlessPart(tr, name, isEditable);
+  if (type === '' || (isEditable && !range)) tr.querySelectorAll('.range-sel option[value=""]').forEach(o => { o.textContent = '（未選択）'; }); // 分類が未選択の行は、射程の空も「（未選択）」と表示する
+  syncTreasureLevel(tr);
+  syncChouaiEligibility(tr);
   updatePartUsedCheckboxVisibility(tr);
 
   const memoTr = document.createElement('tr');
@@ -720,4 +826,35 @@ document.addEventListener('change', e => {
     if (sel.value === 'たからもの') set.add(name); else set.delete(name);
     localStorage.setItem('necro_treasure_names', JSON.stringify([...set].slice(-200)));
   } catch (err) {}
+});
+
+// 「たからもの」にはレベルが無いので、Lvの欄は「-」にして触れなくする(種別を変えたら、Lvの選択肢を元に戻す)
+function syncTreasureLevel(tr) {
+  try {
+    const type = tr.querySelector('.p-type')?.value || '';
+    const lv = tr.querySelector('.p-level');
+    if (!lv) return;
+    if (type === 'たからもの') {
+      lv.innerHTML = '<option value="">-</option>';
+      lv.value = '';
+      lv.disabled = true;
+      tr.classList.add('treasure-nolevel');
+    } else if (tr.classList.contains('treasure-nolevel')) {
+      lv.innerHTML = buildLevelOptionsHtml('1');
+      lv.disabled = tr.querySelector('.p-type')?.disabled ? true : false;
+      tr.classList.remove('treasure-nolevel');
+    }
+  } catch (e) { /* Lvの表示を直せなくても、ほかの動きには影響しない */ }
+}
+// 「基本」「たからもの」のパーツは、寵愛点では取らないので、「寵」ボタンと印の対象外にする(種別を変えたときも追従する)
+function syncChouaiEligibility(tr) {
+  if (!tr) return;
+  const type = tr.querySelector('.p-type')?.value || '';
+  const off = (type === '基本' || type === 'たからもの');
+  tr.classList.toggle('no-chouai', off);
+  if (off && (tr.classList.contains('chouai-acq') || tr.classList.contains('other-acq'))) { tr.classList.remove('chouai-acq'); tr.classList.remove('other-acq'); try { calcTotals(); } catch (e) {} }
+}
+document.addEventListener('change', e => {
+  const sel = e.target;
+  if (sel && sel.matches && sel.matches('.p-type')) { syncTreasureLevel(sel.closest('tr')); syncChouaiEligibility(sel.closest('tr')); }
 });

@@ -20,6 +20,7 @@ function getFullData() {
     eye: getVal('eye'),
     skin: getVal('skin'),
     freeMemo: getVal('free-memo'),
+    battleMemo: getVal('battle-memo'),
     ps: getVal('ps'),
     hint: getVal('hint'),
     act: getVal('act'),
@@ -44,13 +45,15 @@ function getFullData() {
     const memo = (memoTr && memoTr.classList.contains('skill-memo-row')) ? (memoTr.querySelector('.skill-memo')?.value || '') : '';
     data.skills.push({
       category: tr.querySelector('.skill-category')?.value || '',
+      slot: tr.dataset.slot || '',
       name: tr.querySelector('.skill-name-select')?.value || '',
       timing: tr.querySelector('.skill-timing')?.value || '',
       cost: tr.querySelector('.skill-cost')?.value || '',
       range: tr.querySelector('.skill-range')?.value || '',
       memo: memo,
       tag: tr.querySelector('.skill-tag')?.value || '',
-      isUsed: tr.querySelector('.skill-used')?.checked || false
+      isUsed: tr.querySelector('.skill-used')?.checked || false,
+      isChouai: tr.classList.contains('chouai-acq')
     });
   });
 
@@ -65,14 +68,16 @@ function getFullData() {
         isUsed: tr.querySelector('.p-used')?.checked || false,
         location: tr.querySelector('.p-location')?.value || '',
         name: name,
-        type: tr.querySelector('.p-type')?.value || '基本',
-        level: tr.querySelector('.p-level')?.value || '1',
+        type: tr.querySelector('.p-type') ? tr.querySelector('.p-type').value : '基本',
+        level: (tr.querySelector('.p-type')?.value === 'たからもの') ? '' : (tr.querySelector('.p-level')?.value || '1'),
         timing: tr.querySelector('.p-timing')?.value || '',
         cost: tr.querySelector('.p-cost')?.value || '',
         range: tr.querySelector('.p-range')?.value || '',
         memo: memo,
         isEditable: !tr.querySelector('.p-name')?.hasAttribute('readonly'),
-        tag: tr.querySelector('.p-tag')?.value || ''
+        tag: tr.querySelector('.p-tag')?.value || '',
+        isChouai: tr.classList.contains('chouai-acq'),
+        isOther: tr.classList.contains('other-acq')
       });
     }
   });
@@ -111,12 +116,13 @@ function getFullData() {
   });
 
   // セッション履歴（獲得）
-  document.querySelectorAll('#session-history-tbody tr').forEach(tr => {
+  document.querySelectorAll('#session-history-tbody tr.h-main').forEach(tr => {
+    const mrow = tr.nextElementSibling && tr.nextElementSibling.classList.contains('history-memo-row') ? tr.nextElementSibling : null;
     data.history.push({
       scenario: tr.querySelector('.h-scenario')?.value || '',
       battle: tr.querySelector('.battle-pts')?.value || 0,
       personal: tr.querySelector('.personal-pts')?.value || 0,
-      memo: tr.querySelector('.h-memo')?.value || ''
+      memo: (mrow ? mrow.querySelector('.h-memo')?.value : '') || ''
     });
   });
 
@@ -257,7 +263,8 @@ function moveToTrash(id, entry) {
     images: entryImages(entry),
     data: entry.data,
     deletedAt: new Date().toISOString(),
-    originalId: id
+    originalId: id,
+    pinned: entry.pinned ? true : undefined // 復元したとき、ピン留めも戻す
   });
   return setTrash(trash.slice(0, TRASH_LIMIT));
 }
@@ -276,6 +283,7 @@ function restoreDeletedSave() {
     savedAt: entry.savedAt || new Date().toISOString(),
     image: entry.image || null,
     images: entryImages(entry),
+    pinned: entry.pinned ? true : undefined,
     data: JSON.parse(JSON.stringify(entry.data || {}))
   };
   if (!setSavedSheets(sheets)) return;
@@ -323,6 +331,44 @@ function migrateOldSingleSave() {
   }
 }
 
+// 上書き保存の前に出す、前回保存からの変更点の要約（比べられなかったときは、その旨だけ出す）
+const DIFF_LABELS = {
+  pl: 'PL名', name: 'ドール名', pos: 'ポジション', mc: 'メインクラス', sc: 'サブクラス', age: '享年', ps: '死因', hint: '未練のヒント',
+  height: '身長', weight: '体重', hair: '髪', eye: '瞳', skin: '肌', freeMemo: 'メモ', battleMemo: '戦闘メモ', act: '最大行動値', actBase: '行動値の基本', fav: '寵愛',
+  chouaiWep: '寵愛点(武装)', chouaiMut: '寵愛点(変異)', chouaiCyb: '寵愛点(改造)', bonus: 'ボーナス', chatPalette: 'チャパレ',
+  ccfoliaMemo: '駒のメモ', ccfoliaExtra: '駒の追加設定', ccfoliaStatus: '駒のステータス', imageBg: '画像の背景色', pieceColor: '駒の色'
+};
+const DIFF_LIST_LABELS = { skills: 'スキル', parts: 'パーツ', treasures: '宝物', memories: '記憶のカケラ', list: '未練', history: '履歴', chouaiUses: '寵愛点の使用' };
+function describeSaveDiff(oldData, newData) {
+  try {
+    if (!oldData || typeof oldData !== 'object') return '（前回の保存内容を読めなかったので、変更点は出せません）';
+    const lines = [];
+    const short = v => { const t = String(v == null ? '' : v).replace(/\s+/g, ' ').trim(); return t ? (t.length > 14 ? t.slice(0, 14) + '…' : t) : '（空）'; };
+    Object.keys(DIFF_LABELS).forEach(k => {
+      const a = oldData[k], b = newData[k];
+      if (JSON.stringify(a == null ? '' : a) !== JSON.stringify(b == null ? '' : b)) {
+        const long = (typeof a === 'string' && a.length > 14) || (typeof b === 'string' && b.length > 14) || k === 'ccfoliaExtra' || k === 'ccfoliaStatus';
+        lines.push(long ? `・${DIFF_LABELS[k]}が変わりました` : `・${DIFF_LABELS[k]}：${short(a)} → ${short(b)}`);
+      }
+    });
+    Object.keys(DIFF_LIST_LABELS).forEach(k => {
+      const A = Array.isArray(oldData[k]) ? oldData[k].map(x => JSON.stringify(x)) : [];
+      const B = Array.isArray(newData[k]) ? newData[k].map(x => JSON.stringify(x)) : [];
+      const count = {};
+      A.forEach(x => { count[x] = (count[x] || 0) + 1; });
+      let added = 0;
+      B.forEach(x => { if (count[x] > 0) count[x]--; else added++; });
+      const removed = Object.keys(count).reduce((s, x) => s + count[x], 0);
+      if (added || removed) lines.push(`・${DIFF_LIST_LABELS[k]}：${B.length}件（前回は${A.length}件）／入れ替わり${Math.max(added, removed)}件`);
+    });
+    if (lines.length === 0) return '前回の保存から変わっているところはありません。';
+    const shown = lines.slice(0, 14);
+    return '前回の保存からの変更点：\n' + shown.join('\n') + (lines.length > shown.length ? `\n…ほか${lines.length - shown.length}項目` : '');
+  } catch (e) {
+    return '（変更点を比べられませんでした）';
+  }
+}
+
 function saveData() {
   const data = getFullData();
   const select = document.getElementById('save-slot');
@@ -348,13 +394,14 @@ function saveData() {
     // 上書き保存
     const existing = sheets[id];
     const existingName = existing ? existing.name : '(無名)';
-    if (!confirm(`「${existingName}」に上書き保存します。よろしいですか？`)) return;
+    if (!confirm(`「${existingName}」に上書き保存します。\n\n${describeSaveDiff(existing && existing.data, data)}\n\nよろしいですか？`)) return;
     // 保存名がドール名そのものだったとき（自分で別の名前を付けていないとき）は、ドール名を変えたら保存名も新しいドール名にする
     const followDollName = !!(existing && existing.data && existing.data.name && existing.data.name === existing.name && data.name);
     sheets[id] = {
       name: followDollName ? data.name : existingName,
       pl: data.pl || '',
       savedAt: new Date().toISOString(),
+      pinned: (existing && existing.pinned) ? true : undefined,
       image: existing ? existing.image || null : null,
       images: existing ? entryImages(existing) : [],
       data: data
@@ -362,8 +409,8 @@ function saveData() {
   }
 
   // 新規保存が完了したら、自動保存の下書き枠は不要になるので片付ける
-  if (wasNew && sheets['autosave_draft']) {
-    delete sheets['autosave_draft'];
+  if (sheets['autosave_draft'] && (wasNew || !sheets['autosave_draft'].draftOf || sheets['autosave_draft'].draftOf === id)) {
+    delete sheets['autosave_draft']; // 保存したキャラの下書きは、もう要らない
   }
 
   if (!setSavedSheets(sheets)) return; // 失敗したときは、保存したと表示しない（isDirty も、画像も、そのまま）
@@ -438,25 +485,39 @@ function exportAllCharactersBackup() {
     effectDict: (typeof getEffectDict === 'function') ? getEffectDict() : {}
   };
 
-  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  const dateStr = new Date().toISOString().slice(0, 10);
-  a.download = `necronica_backup_${dateStr}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
+  try {
+    // 書き出す前に、いったん読み戻して、人数と中身が元と同じことを確かめる
+    const jsonText = JSON.stringify(backup, null, 2);
+    const check = JSON.parse(jsonText);
+    const cids = Object.keys(check.sheets || {});
+    if (cids.length !== ids.length || cids.some(k => JSON.stringify(check.sheets[k]) !== JSON.stringify(sheets[k]))) throw new Error('書き出す内容が元と一致しませんでした');
+    const blob = new Blob([jsonText], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const dateStr = new Date().toISOString().slice(0, 10);
+    a.download = `necronica_backup_${dateStr}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  } catch (err) {
+    // 書き出せなかったときは、「バックアップ済み」にしない
+    alert('バックアップファイルを書き出せませんでした。\n（' + (err && err.message ? err.message : err) + '）\n\nキャラクターが多すぎるか、ブラウザが対応していない可能性があります。「JSON出力」でキャラクターを1人ずつ書き出すこともできます。');
+    return;
+  }
   try { localStorage.setItem('necro_last_backup', String(Date.now())); } catch (e) {}
+  hideBackupNudge();
   updateBackupReminder();
 
-  alert(`${ids.length}件のキャラクターをバックアップファイルとして書き出しました`);
+  alert(`${ids.length}件のキャラクターをバックアップファイルとして書き出しました。\n\n※このファイルは、クラウドやメールなど、このブラウザとは別の場所にも置いておくと安心です。「バックアップファイルを確認」で、中身をいつでも確かめられます。`);
 }
 
 // 最後にバックアップを取ってからの日数を表示する（未バックアップ・14日以上は注意色）
 function updateBackupReminder() {
   const el = document.getElementById('backup-reminder');
   if (!el) return;
-  const n = Object.keys(getSavedSheets()).length;
+  const n = Object.keys(getSavedSheets()).filter(i => i !== 'autosave_draft').length; // 下書き(自動保存)は数えない(お知らせの判定と同じ)
   if (n === 0) { el.style.display = 'none'; return; }
   let last = 0;
   try { last = parseInt(localStorage.getItem('necro_last_backup') || '0', 10) || 0; } catch (e) {}
@@ -469,7 +530,7 @@ function updateBackupReminder() {
   }
   el.style.display = '';
   el.style.color = warn ? '#ffcf70' : '#9a9';
-  el.innerHTML = `${warn ? '⚠ ' : ''}${msg} <button type="button" class="char-switch-btn" style="margin-left:6px;" onclick="exportAllCharactersBackup()">バックアップを取る</button>`;
+  el.innerHTML = `${warn ? '⚠ ' : ''}${msg} <button type="button" class="char-switch-btn" style="margin-left:6px;width:auto;display:inline-block;" onclick="exportAllCharactersBackup()">バックアップを取る</button>`;
 }
 
 function onBackupFileSelected(event) {
@@ -565,9 +626,34 @@ function newBlankSheet() {
   if (typeof autoResizeAllMemoTextareas === 'function') setTimeout(autoResizeAllMemoTextareas, 50);
 }
 
+// 読み込み中は寵の印を自動で付けず(前の使い道が残っていることがあるため)、終わってから、使い道と同じ名前の行に印を付ける(失敗しても必ず元に戻す)
 function applyData(data) {
+  chouaiLoading = true;
+  try { return applyData_(data); } finally { try { chouaiSeedRows(); } catch (e) {} chouaiLoading = false; try { autoMarkChouaiFromUses(true, true); } catch (e) {} } // 読み込み後、使い道と同じ名前のスキル・パーツには、寵を付けなくても印を付けて数に入れる
+}
+function applyData_(data) {
   // 以前の誤字「よぷんなめ」が入っていたら、「よぶんなめ」に直して読み込む
   try { const js = JSON.stringify(data); const fx = fixKnownTyposInString(js); if (fx !== js) data = JSON.parse(fx); } catch (e) {}
+  // 以前の「サイケデリック」のキャラは、「サイケデリック(歪曲)」に読み替える(クラス名・スキルのクラス・スキル名)
+  try {
+    const PSY_OLD = 'サイケデリック', PSY_NEW = 'サイケデリック(歪曲)';
+    const old = ['mc', 'sc'].some(k => data && data[k] === PSY_OLD) || (data && Array.isArray(data.skills) && data.skills.some(s => s && s.category === PSY_OLD));
+    if (old) {
+      data = JSON.parse(JSON.stringify(data));
+      ['mc', 'sc'].forEach(k => { if (data[k] === PSY_OLD) data[k] = PSY_NEW; });
+      (data.skills || []).forEach(s => {
+        if (s && s.category === PSY_OLD) {
+          s.category = PSY_NEW;
+          if (typeof s.name === 'string' && s.name && !s.name.endsWith('(歪曲)') && SKILL_DATABASE[PSY_NEW].some(x => x.name === s.name + '(歪曲)')) s.name += '(歪曲)';
+        }
+      });
+    }
+    // ポジションのスキルのうち、サプリのもの(祈り・血の涙など)にも「(歪曲)」を付けて読み替える
+    if (data && Array.isArray(data.skills) && data.skills.some(s => s && typeof s.name === 'string' && normSkillName(s.category, s.name) !== s.name)) {
+      data = JSON.parse(JSON.stringify(data));
+      data.skills.forEach(s => { if (s && typeof s.name === 'string') s.name = normSkillName(s.category, s.name); });
+    }
+  } catch (e) {}
   const setVal = (id, val) => { if(document.getElementById(id)) document.getElementById(id).value = val || ''; };
 
   setVal('pl', data.pl); setVal('name', data.name);
@@ -585,6 +671,8 @@ function applyData(data) {
   setVal('hair', data.hair); setVal('eye', data.eye); setVal('skin', data.skin);
   setVal('free-memo', data.freeMemo);
   autoResizeTextarea(document.getElementById('free-memo'));
+  setVal('battle-memo', data.battleMemo);
+  autoResizeTextarea(document.getElementById('battle-memo'));
   setVal('hint', data.hint);
   setVal('act', data.act || '9'); setVal('fav', data.fav || '0');
   setVal('chouai-wep', data.chouaiWep || '0'); setVal('chouai-mut', data.chouaiMut || '0'); setVal('chouai-cyb', data.chouaiCyb || '0');
@@ -626,7 +714,8 @@ function applyData(data) {
           memo = parsed.timing || parsed.cost || parsed.range ? parsed.effect : memo;
         }
 
-        addSkillRow(s.category, s.name, timing || '', cost || '', range || '', memo || '', s.tag || '', !!s.isUsed);
+        addSkillRow(s.category, s.name, timing || '', cost || '', range || '', memo || '', s.tag || '', !!s.isUsed, !!s.isChouai);
+        { const rr = document.querySelectorAll('#skill-tbody tr.skill-row'); const lr = rr[rr.length - 1]; if (lr) { if (s.slot) lr.dataset.slot = s.slot; } }
       });
     }
   }
@@ -650,9 +739,9 @@ function applyData(data) {
   if (memoryListEl) {
     memoryListEl.innerHTML = '';
     if (Array.isArray(data.memories) && data.memories.length > 0) {
-      data.memories.forEach(m => addMemoryEntry(m));
+      data.memories.forEach(m => addMemoryEntry(m, true));
     } else if (data.mem) {
-      addMemoryEntry(data.mem);
+      addMemoryEntry(data.mem, true);
     }
   }
 
@@ -678,6 +767,7 @@ function applyData(data) {
   const useTbody = document.getElementById('chouai-use-tbody');
   if (useTbody) {
     useTbody.innerHTML = '';
+    chouaiMemoSnap = null; // 読み込み直しでは、印を付け外ししない
     if (data.chouaiUses) {
       data.chouaiUses.forEach(u => addChouaiUseRow(u.used, u.memo));
     }
@@ -707,7 +797,7 @@ function restorePartsFromData(parts) {
       DEFAULT_PARTS[secId].forEach((p, idx) => {
         const saved = savedBaseStates[idx];
         addPartRow(tbody, p.name, p.type, p.level, p.timing, p.cost, p.range, p.memo || '', false, locMap[secId], saved ? saved.tag || '' : '');
-        if (saved) applyRowFlags(tbody, saved.isBroken, saved.isUsed);
+        if (saved) applyRowFlags(tbody, saved.isBroken, saved.isUsed, saved.isChouai, saved.isOther);
       });
     }
   });
@@ -726,17 +816,19 @@ function restorePartsFromData(parts) {
     if (!tbody) return;
 
     addPartRow(tbody, p.name, p.type, p.level, p.timing, p.cost, p.range, p.memo, p.isEditable, p.location || locMap[secId], p.tag || '');
-    applyRowFlags(tbody, p.isBroken, p.isUsed);
+    applyRowFlags(tbody, p.isBroken, p.isUsed, p.isChouai, p.isOther);
   });
 
   if (typeof updateExtraPartOptions === 'function') updateExtraPartOptions();
 }
 
 // 追加したばかりの行（tbodyの最後の行）に損傷・使用チェックの状態を反映する
-function applyRowFlags(tbody, isBroken, isUsed) {
+function applyRowFlags(tbody, isBroken, isUsed, isChouai, isOther) {
   const rows = tbody.querySelectorAll('tr.part-row');
   const lastRow = rows[rows.length - 1];
   if (!lastRow) return;
+  if (isChouai && lastRow.querySelector('.chouai-btn') && !lastRow.classList.contains('no-chouai')) lastRow.classList.add('chouai-acq');
+  else if (isOther && lastRow.querySelector('.other-btn') && !lastRow.classList.contains('no-chouai')) lastRow.classList.add('other-acq');
   if (isBroken) {
     const cb = lastRow.querySelector('.p-broken');
     if (cb) { cb.checked = true; togglePartBreak(cb); }
@@ -747,3 +839,233 @@ function applyRowFlags(tbody, isBroken, isUsed) {
   }
 }
 
+
+// 起動時のバックアップのお願い：保存済みキャラがいて、14日以上バックアップしていない（または一度も取っていない）とき、画面の下に一度だけ出す。
+// 「あとで」を押したら7日は出さない。閉じても保存や操作の邪魔にならないよう、確認ダイアログは使わない
+let backupNudgeShown = false;
+function hideBackupNudge() {
+  const el = document.getElementById('backup-nudge');
+  if (el) el.remove();
+}
+function maybeShowBackupNudge() {
+  try {
+    if (backupNudgeShown) return;
+    if (document.body.classList.contains('view-locked')) return; // 閲覧用URLで開いたときは出さない
+    const sheets = getSavedSheets();
+    const n = Object.keys(sheets).filter(i => i !== 'autosave_draft').length;
+    if (n === 0) return;
+    let last = 0, asked = 0;
+    try {
+      last = parseInt(localStorage.getItem('necro_last_backup') || '0', 10) || 0;
+      asked = parseInt(localStorage.getItem('necro_backup_nudge_at') || '0', 10) || 0;
+    } catch (e) {}
+    const DAY = 86400000;
+    // 時計が進んだあとに戻されたなどで、記録の時刻が「未来」になっているときは、無効なものとして扱う(お知らせが出なくなるのを防ぐ)
+    const now = Date.now();
+    if (last > now) last = 0;
+    if (asked > now) asked = 0;
+    if (last && now - last < 14 * DAY) return;
+    if (asked && now - asked < 7 * DAY) return;
+    backupNudgeShown = true;
+    const days = last ? Math.floor((Date.now() - last) / DAY) : 0;
+    const el = document.createElement('div');
+    el.id = 'backup-nudge';
+    el.setAttribute('role', 'alert');
+    el.style.cssText = 'position:fixed;left:8px;right:8px;bottom:calc(8px + env(safe-area-inset-bottom));z-index:10000;background:#241416;color:#fff;border:1px solid #f0a0a0;border-radius:10px;padding:10px 12px;font-size:.82rem;box-shadow:0 4px 14px rgba(0,0,0,.6);display:flex;flex-direction:column;gap:8px;max-width:560px;margin:0 auto;';
+    const msg = document.createElement('div');
+    msg.textContent = last
+      ? `最後のバックアップから${days}日たっています。キャラクターはこのブラウザの中にだけ保存されているので、ここでバックアップしておくと安心です。`
+      : 'まだバックアップを取っていません。キャラクターはこのブラウザの中にだけ保存されているので、ここでバックアップしておくと安心です。';
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:8px;justify-content:flex-end;';
+    const later = document.createElement('button');
+    later.type = 'button'; later.className = 'sec'; later.textContent = 'あとで';
+    later.onclick = () => { try { localStorage.setItem('necro_backup_nudge_at', String(Date.now())); } catch (e) {} hideBackupNudge(); };
+    const go = document.createElement('button');
+    go.type = 'button'; go.textContent = '📦 バックアップを取る';
+    go.onclick = () => {
+      // 書き出しに成功して「最後のバックアップ」の時刻が更新されたときだけ、お知らせを閉じる(失敗・中止のときは残し、「7日出さない」も記録しない)
+      let before = 0; try { before = parseInt(localStorage.getItem('necro_last_backup') || '0', 10) || 0; } catch (e) {}
+      exportAllCharactersBackup();
+      let after = 0; try { after = parseInt(localStorage.getItem('necro_last_backup') || '0', 10) || 0; } catch (e) {}
+      if (after !== before) hideBackupNudge();
+    };
+    row.appendChild(later); row.appendChild(go);
+    el.appendChild(msg); el.appendChild(row);
+    document.body.appendChild(el);
+  } catch (e) { /* 出せなくても、ほかの動きには影響しない */ }
+}
+
+// ==========================================================
+// 削除したキャラの一覧（復元・完全に削除）
+// ==========================================================
+function restoreTrashEntry(index) {
+  const trash = getTrash();
+  const entry = trash[index];
+  if (!entry) { alert('その項目は見つかりませんでした'); return false; }
+  const sheets = getSavedSheets();
+  const newId = 'char_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+  sheets[newId] = {
+    name: entry.name || '(無名)',
+    pl: entry.pl || '',
+    savedAt: entry.savedAt || new Date().toISOString(),
+    image: entry.image || null,
+    images: entryImages(entry),
+    pinned: entry.pinned ? true : undefined,
+    data: JSON.parse(JSON.stringify(entry.data || {}))
+  };
+  if (!setSavedSheets(sheets)) return false; // 失敗したときは、ゴミ箱の中身は減らさない
+  trash.splice(index, 1);
+  if (!setTrash(trash)) alert('復元はできましたが、ゴミ箱の一覧を更新できませんでした。同じキャラがゴミ箱に残っている場合があります');
+  refreshSaveSlotOptions(newId);
+  return true;
+}
+function openTrashList() { showTrashList(); }
+function showTrashList() {
+  const existing = document.getElementById('trash-overlay');
+  if (existing) existing.remove();
+  const trash = getTrash();
+  if (trash.length === 0) return alert('復元できる削除済みキャラクターはありません');
+  const ov = document.createElement('div');
+  ov.id = 'trash-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:10001;padding:16px;overflow-y:auto;';
+  const fmt = iso => { try { return iso ? new Date(iso).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''; } catch (e) { return ''; } };
+  const rows = trash.map((t, i) => `<div style="display:flex;align-items:center;gap:6px;border-bottom:1px solid #333;padding:6px 0;">
+      <div style="flex:1 1 auto;min-width:0;"><div style="font-weight:bold;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(t.name || '(無名)')}${t.pl ? `<span style="color:#999;font-size:.75rem;font-weight:normal;">（PL：${escapeHtml(t.pl)}）</span>` : ''}</div>
+      <div style="font-size:.7rem;color:#888;">${escapeHtml(fmt(t.deletedAt) ? fmt(t.deletedAt) + ' に削除' : '')}</div></div>
+      <button type="button" data-act="restore" data-i="${i}" style="font-size:.78rem;padding:4px 8px;">復元</button>
+      <button type="button" class="sec" data-act="purge" data-i="${i}" style="font-size:.78rem;padding:4px 8px;">完全に削除</button></div>`).join('');
+  ov.innerHTML = `<div style="max-width:400px;margin:50px auto;background:#18181c;border:1.5px solid #8b0000;border-radius:10px;padding:14px;color:#eee;">
+    <div style="color:#f0a0a0;font-weight:bold;margin-bottom:4px;">↩️ 削除したキャラクター</div>
+    <div style="font-size:.74rem;color:#999;margin-bottom:6px;">新しいものから、最大${TRASH_LIMIT}件まで残ります。「復元」は、新しいキャラクターとして保存済み一覧に戻します。</div>
+    ${rows}
+    <div style="display:flex;justify-content:flex-end;margin-top:12px;"><button type="button" class="sec" id="trash-close">閉じる</button></div></div>`;
+  document.body.appendChild(ov);
+  const close = () => ov.remove();
+  ov.addEventListener('click', e => {
+    if (e.target === ov) return close();
+    const b = e.target.closest && e.target.closest('button[data-act]');
+    if (!b) return;
+    const i = parseInt(b.dataset.i, 10);
+    const entry = getTrash()[i];
+    if (!entry) return;
+    if (b.dataset.act === 'restore') {
+      if (restoreTrashEntry(i)) { showToast('✔ 「' + (entry.name || '(無名)') + '」を復元しました'); openTrashListOrClose(); }
+    } else if (b.dataset.act === 'purge') {
+      if (!confirm('「' + (entry.name || '(無名)') + '」を完全に削除します。もう元に戻せません。よろしいですか？')) return;
+      const tr = getTrash(); tr.splice(i, 1);
+      if (!setTrash(tr)) return alert('完全に削除できませんでした');
+      openTrashListOrClose();
+    }
+  });
+  ov.querySelector('#trash-close').onclick = close;
+}
+function openTrashListOrClose() {
+  if (getTrash().length === 0) { const o = document.getElementById('trash-overlay'); if (o) o.remove(); }
+  else showTrashList();
+}
+
+// バックアップファイルの確認：復元はせずに、読めるか・何人入っているか・今のブラウザと同じかを調べる
+function onBackupVerifySelected(event) {
+  const input = event.target;
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onerror = () => { alert('ファイルを読み込めませんでした'); input.value = ''; };
+  reader.onload = function (e) {
+    try {
+      let b;
+      try { b = JSON.parse(e.target.result); } catch (err) { return alert('このファイルは、バックアップとして読めませんでした。\n（JSONの形式が壊れています）'); }
+      const sheets = b && b.type === 'necronica_backup' && b.sheets && typeof b.sheets === 'object' ? b.sheets : null;
+      if (!sheets) return alert('このファイルは、「全キャラをバックアップ」で書き出したファイルではないようです');
+      const ids = Object.keys(sheets).filter(i => i !== 'autosave_draft');
+      const bad = ids.filter(i => !sheets[i] || typeof sheets[i] !== 'object' || !sheets[i].data || typeof sheets[i].data !== 'object');
+      const cur = getSavedSheets();
+      const curIds = Object.keys(cur).filter(i => i !== 'autosave_draft');
+      let same = 0, differ = 0, missing = 0;
+      ids.forEach(i => {
+        if (!cur[i]) missing++;
+        else if (JSON.stringify(cur[i].data) === JSON.stringify((sheets[i] || {}).data)) same++;
+        else differ++;
+      });
+      const names = ids.slice(0, 8).map(i => '・' + ((sheets[i] && sheets[i].name) || '(無名)')).join('\n') + (ids.length > 8 ? `\n…ほか${ids.length - 8}人` : '');
+      const when = b.exportedAt ? '書き出した日時：' + new Date(b.exportedAt).toLocaleString('ja-JP') + '\n' : '';
+      alert(`バックアップファイルを確認しました。\n${when}キャラクター：${ids.length}人${bad.length ? `（うち${bad.length}人は中身が壊れています）` : '（すべて読めます）'}\n${names}\n\n今のブラウザとの比較：\n・同じ内容：${same}人\n・内容が違う：${differ}人\n・このブラウザに無い：${missing}人\n（今のブラウザにだけいるキャラ：${curIds.filter(i => !sheets[i]).length}人）\n\n※復元はしていません。復元するときは「バックアップから復元」を使ってください。`);
+    } catch (err) {
+      alert('確認中にエラーが出ました。\n' + (err && err.message ? err.message : err));
+    } finally {
+      input.value = '';
+    }
+  };
+  reader.readAsText(file);
+}
+
+// ---- 保存領域の使用量の表示と、画像を軽くする機能 ----
+function entrySizeChars(e) { try { return JSON.stringify(e).length; } catch (er) { return 0; } }
+function fmtKB(n) { return n >= 1024 * 1024 ? (n / 1024 / 1024).toFixed(1) + 'MB' : Math.max(1, Math.round(n / 1024)) + 'KB'; }
+
+function renderStorageInfo() {
+  const box = document.getElementById('storage-info');
+  if (!box) return;
+  try {
+    const ratio = getStorageUsageRatio();
+    const pct = Math.min(100, Math.round(ratio * 100));
+    const color = ratio >= 0.8 ? '#e55' : ratio >= 0.5 ? '#eb4' : '#6c8';
+    const sheets = getSavedSheets();
+    const rows = Object.keys(sheets).map(id => {
+      const e = sheets[id];
+      const imgs = entryImages(e);
+      return { name: e.name || '(名前なし)', size: entrySizeChars(e), img: imgs.length };
+    }).filter(r => r.img > 0).sort((a, b) => b.size - a.size).slice(0, 3);
+    const heavy = rows.length ? '<div style="opacity:.85;margin-top:2px;">画像で重いキャラ：' + rows.map(r => `${escapeHtmlSafe(r.name)}（${fmtKB(r.size)}・画像${r.img}枚）`).join('、') + '</div>' : '';
+    const warn = ratio >= 0.8 ? '<div style="color:#e55;">※もうすぐいっぱいです。バックアップしてから、使わないキャラの削除や「画像を軽くする」をおすすめします。</div>' : '';
+    box.innerHTML = `<div>💾 ブラウザの保存領域：約${pct}%使用中（目安 約${fmtKB(STORAGE_LIMIT_CHARS)}）</div>
+      <div style="height:8px;background:#333;border-radius:4px;overflow:hidden;margin:3px 0;"><div style="width:${pct}%;height:100%;background:${color};"></div></div>${heavy}${warn}
+      <button type="button" class="action-btn c-teal" style="margin-top:6px;" onclick="compressSavedImages()"><span class="icon">📦</span><span>画像を軽くする<br>（保存済みの全画像）</span></button>`;
+  } catch (e) { box.innerHTML = ''; }
+}
+function escapeHtmlSafe(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+
+function recompressDataUrl(url, maxDim, quality) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        let w = img.width, h = img.height;
+        const k = Math.min(1, maxDim / Math.max(w, h));
+        w = Math.max(1, Math.round(w * k)); h = Math.max(1, Math.round(h * k));
+        const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+        const cx = cv.getContext('2d'); cx.drawImage(img, 0, 0, w, h);
+        let alpha = false;
+        const px = cx.getImageData(0, 0, w, h).data;
+        for (let i = 3; i < px.length; i += 4) { if (px[i] < 250) { alpha = true; break; } }
+        let out = alpha ? cv.toDataURL('image/webp', quality) : cv.toDataURL('image/jpeg', quality);
+        if (alpha && !out.startsWith('data:image/webp')) out = url; // 透明を保てないときは、そのまま
+        resolve(out.length < url.length ? out : url); // 軽くならなければ、元のまま
+      } catch (e) { resolve(url); }
+    };
+    img.onerror = () => resolve(url);
+    img.src = url;
+  });
+}
+
+async function compressSavedImages() {
+  const sheets = getSavedSheets();
+  const ids = Object.keys(sheets).filter(id => entryImages(sheets[id]).length);
+  if (!ids.length) return alert('保存済みのキャラクターに、画像はありません');
+  if (!confirm('保存済みの全キャラの画像を、小さく・軽く作り直します（画質は少し落ちます。元には戻せません）。\n\n先に「全キャラをバックアップ」しておくと安心です。続けますか？')) return;
+  const before = getStorageUsageRatio() * STORAGE_LIMIT_CHARS;
+  try {
+    for (const id of ids) {
+      const list = await Promise.all(entryImages(sheets[id]).map(u => recompressDataUrl(u, 240, 0.5)));
+      sheets[id].images = list; sheets[id].image = list[0];
+    }
+    if (!setSavedSheets(sheets)) return; // 失敗したときは、保存領域のメッセージが出て、元のまま
+    const after = getStorageUsageRatio() * STORAGE_LIMIT_CHARS;
+    renderStorageInfo();
+    try { renderSaveCards(document.getElementById('save-slot')?.value || ''); } catch (e) {}
+    alert(`画像を軽くしました（約${fmtKB(Math.max(0, before - after))}の節約）`);
+  } catch (e) {
+    alert('画像を軽くする途中でエラーが起きたため、中止しました。保存済みのデータはそのままです。');
+  }
+}
