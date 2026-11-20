@@ -17,7 +17,7 @@
 <meta name="apple-mobile-web-app-title" content="ドール設計図館">
 <meta name="application-name" content="ドール設計図館">
 <meta name="theme-color" content="#1c2a63">
-<link rel="stylesheet" href="style.css?v=276">
+<link rel="stylesheet" href="style.css?v=286">
 </head>
 <body>
 
@@ -57,10 +57,14 @@
     </div>
     <div class="bar-tools">
       <button type="button" id="bar-fold-btn" onclick="toggleBarFold()">▲ 閉じる</button>
+      <button type="button" id="look-toggle" onclick="toggleLookTools()" aria-expanded="false">⚙ 表示設定</button>
+      <span class="look-tools" id="look-tools">
       <button type="button" id="fs-btn" onclick="cycleFontSize()">文字：中</button>
       <button type="button" id="roomy-btn" onclick="toggleRoomy()">表：標準</button>
       <button type="button" id="theme-btn" onclick="toggleTheme()">配色：暗</button>
+      </span>
     </div>
+    <div class="bar-summary" id="bar-summary" aria-live="off" role="button" tabindex="0" title="押すと開きます" onclick="toggleBarFold()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleBarFold();}"></div>
     <div class="bar-detail">
     <div class="toc-row">
       <button type="button" onclick="jumpToSection('sec-basic')">基本</button>
@@ -649,6 +653,7 @@
 
     <h4 style="color:#8ff; margin:12px 0 4px;">■ 保存・切り替え</h4>
     <ul style="margin:0; padding-left:1.2em;">
+      <li>使い方の一番下に、いま開いているバージョンの番号と、「最新か確認」ボタンがあります。直したはずの内容が画面に出ないときは、ここで最新かどうかを確かめて、古いときは再読み込みしてください。未保存が3分以上続くと、「💾 保存」ボタンの文字が「未保存！保存」に変わります。スマホで別のアプリに切り替えたときにも、すぐ下書きを控えます。</li>
       <li>データはこのブラウザの中に保存されます。「💾 保存」で保存し、カードを選んで保存すると上書きになります。</li>
       <li>公開サイトでは、どの機能が使われたかを、回数だけ、個人を特定しない形で数えています(アクセス解析のGoatCounterを使い、キャラクターの内容や名前は送りません)。</li>
       <li>カードを選んで上書き保存するときは、確認の画面に、前回の保存から変わった項目(変わった欄と、増減した件数)が出ます。</li>
@@ -661,7 +666,7 @@
       <li>「↩️ 元に戻す」は、欄を書き換えて確定するたび、パーツやスキルの追加・削除、読み込みなどの前の状態に、最大40回まで順にさかのぼれます。戻しすぎたときは「↪️ やり直す」で進められます。</li>
       <li>「🔒 表示 / ✏️ 編集」で、セッション中に見る用の表示モード(編集不可・損傷チェックのみ操作可)に切り替えます。</li>
       <li>表示モードの「⚔️ 戦闘用」は、パーツ・スキル・未練・行動値だけに絞る表示です(押すと全項目を表示)。記憶のカケラは表示せず、スキルの表は、区分の列と色の凡例を省いて行を詰めます(未練の表も同じように詰め、発狂の効果文も表の幅いっぱいに出します)。そのため、1画面でたくさん見られます。</li>
-      <li>画面上部の固定バーは、「▲ 閉じる」で武装・変異・改造の表を畳めます。「基本」「未練」などのボタンで、その項目へ飛べます。「文字：中」を押すと、文字の大きさが 小→中→大 と切り替わります。</li>
+      <li>画面上部の固定バーは、「▲ 閉じる」で武装・変異・改造の表を畳めます。畳んでいる間は、武装・変異・改造・スキルの使用数が1行で出ます(その1行を押しても開きます)。スマホでは、初めは畳んだ状態で始まります。「基本」「未練」などのボタンで、その項目へ飛べます。「文字：中」を押すと、文字の大きさが 小→中→大 と切り替わります(スマホでは「⚙ 表示設定」を押すと、文字・表・配色のボタンが出ます)。スマホでは、スクロール中や入力中は、左下・右下の固定ボタンが薄くなります(触れば使えます)。</li>
       <li>固定バーの「表：標準/ゆったり」で、スキル・マニューバの表の文字と余白を広げられます。表の枠に入りきらない文字(長い名前など)は、自動で小さくなって枠に収まります。「配色：暗/明」で、画面を白地にもできます。スキル・マニューバの見出しの下には、種別の色の意味が出ます。損傷した行は灰色(左端が赤)、使用済みの行は左端が黄色で見分けられます。</li>
       <li>表示モードでも、「使用チェックを一括解除」は押せます(セッション終了時などに)。</li>
       <li>削除したキャラクターは、「削除したキャラを復元」で直近5件まで戻せます。</li>
@@ -710,6 +715,13 @@
       <li>2026/11/10 パーツ・スキルのコストと射程の「無し」を「なし」にそろえました(入力した「無し」は、そのまま残ります)。</li>
       <li>2026/11/16 キャラクター画像を、最大6枚まで設定できるようにしました。設定する場所も、基本情報のいちばん上にしました。</li>
       <li>2026/11/17 クラス「サイケデリック」(スキルは名前のみ)を追加しました。各クラスの特化スキルには、スキル選択で「（特化）」と表示されます。</li>
+      <li>2026/11/21 スマホの画面を使いやすくしました。上の固定バーは、初めは畳んだ状態で始まり、武装・変異・改造・スキルの使用数が1行で出ます(押すと開きます)。文字・表・配色のボタンは「⚙ 表示設定」にまとめました。</li>
+      <li>2026/11/21 スマホで編集するときのパーツ表を、2段に折り返して見やすくしました。幅の狭い小型のスマホでは、パーツ名を独立した段にして、長い名前も読めるようにしました。</li>
+      <li>2026/11/21 スマホで、スクロール中や入力中は、左下・右下の固定ボタンが薄くなり、表の内容が読めるようになりました。</li>
+      <li>2026/11/21 表示モードのパーツ表で、文字と枠の間の縦の余白をなくして、行を詰めました。</li>
+      <li>2026/11/21 保存し忘れを防ぐ工夫を足しました。変更したまま3分たつと、保存ボタンが「💾 未保存！保存」に変わります。アプリを閉じたり別のアプリに切り替えたりしたときは、下書きを自動で残します。</li>
+      <li>2026/11/21 使い方の一番下に、いま開いているバージョンの番号と、「最新か確認」ボタンを足しました。</li>
+      <li>2026/11/21 「獲得」の印は、付いている行にだけボタンが出る形にしました(外すとき用)。</li>
       <li>2026/11/20 寵の印を、自動で付けるようにしました。「寵愛点の使い道」にスキル名・パーツ名を書くと、同じ名前の行の左端に金色の印が付き、名前を消す・書き換えると外れます(行の「寵」ボタンはなくなりました)。基本パーツ・たからものは対象外です。1文字の名前や、「〜を習得」のように助詞が付いた書き方にも対応しました。</li>
       <li>2026/11/20 上限の数え方を変えました。「寵愛点の使い道」に名前が書いてあるマニューバ(パーツ)・スキルは、寵愛で取ったものとして取得数に数え、上限も1個につき1増えます(例：Lv1: 2/2(寵1)、メイン: 2/3(寵1))。書いていないのに上限を超えた分は、超過になります。チェッカーの表では「規定上限 2 個(寵1)」のように出ます。</li>
       <li>2026/11/20 「レベル取得制限チェッカー」に、スキル(ポジション・メイン・サブ)の欄を追加しました。固定バーにも、武装・変異・改造の下に「スキル」の行が出ます(初期の取得数は、ポジション1・メイン2・サブ1です)。</li>
@@ -734,6 +746,11 @@
       <li>2026/11/18 戦闘用のON/OFFの見た目を、一目で分かるようにしました。パソコンの画面では、左右の固定ボタンが内容に重ならないようにしました。</li>
       <li>2026/11/18 不具合の修正：他の人から届いた共有データ・バックアップで、画面が乱れたり悪用されたりしないようにしました。編集中のキャラの下書きが別のキャラに付く問題、「新規作成」しても再読み込みで元に戻る問題、下書きカードで画像が消える問題、保存領域が足りないときに自動保存が削除済みキャラの復元用データを消す問題、保存データが壊れたときの上書きを直しました。パーツ名「よぷんなめ」は「よぶんなめ」に直しました。</li>
     </ul>
+    <div id="help-version" style="margin-top:12px;padding-top:10px;border-top:1px dashed #555;font-size:.82rem;color:#bbb;line-height:1.7;">
+      いま開いているバージョン：<b id="app-version" style="color:#8ff;">-</b>
+      <button type="button" onclick="checkLatestVersion()" style="margin-left:6px;padding:3px 8px;font-size:.78rem;">最新か確認</button>
+      <div id="app-version-result" aria-live="polite"></div>
+    </div>
   </div>
 </div>
 
@@ -751,17 +768,17 @@
   </div>
 </div>
 
-<script src="data.js?v=276"></script>
-<script src="app-core.js?v=276"></script>
-<script src="app-parts.js?v=276"></script>
-<script src="app-skills.js?v=276"></script>
-<script src="app-save.js?v=276"></script>
-<script src="app-dict.js?v=276"></script>
-<script src="app-image.js?v=276"></script>
-<script src="app-look.js?v=276"></script>
-<script src="app-sheetprint.js?v=276"></script>
-<script src="app-share.js?v=276"></script>
-<script src="app-main.js?v=276"></script>
+<script src="data.js?v=286"></script>
+<script src="app-core.js?v=286"></script>
+<script src="app-parts.js?v=286"></script>
+<script src="app-skills.js?v=286"></script>
+<script src="app-save.js?v=286"></script>
+<script src="app-dict.js?v=286"></script>
+<script src="app-image.js?v=286"></script>
+<script src="app-look.js?v=286"></script>
+<script src="app-sheetprint.js?v=286"></script>
+<script src="app-share.js?v=286"></script>
+<script src="app-main.js?v=286"></script>
 <script data-goatcounter="https://dollsekkeizukann.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
 </body>
 </html>

@@ -1,4 +1,37 @@
 // ==========================================================
+// いま開いているバージョンの番号(ファイル名の「?v=」の数字)を返す
+function getAppVersion() {
+  try {
+    const s = document.querySelector('script[src*="app-main.js"]');
+    const m = s && /[?&]v=(\d+)/.exec(s.getAttribute('src') || '');
+    return m ? m[1] : '';
+  } catch (e) { return ''; }
+}
+function showAppVersion() {
+  const el = document.getElementById('app-version');
+  if (el) el.textContent = getAppVersion() ? 'v' + getAppVersion() : '(不明)';
+}
+// 公開されている最新のバージョンと見比べる(通信できないときは、その旨を知らせる)
+async function checkLatestVersion() {
+  const out = document.getElementById('app-version-result');
+  const say = (t, ok) => { if (out) { out.textContent = t; out.style.color = ok === true ? '#7fe3a8' : (ok === false ? '#ffb3bd' : '#bbb'); } };
+  try {
+    say('確認中…');
+    const res = await fetch('index.html?_=' + Date.now(), { cache: 'no-store' });
+    if (!res.ok) throw new Error('http ' + res.status);
+    const html = await res.text();
+    const m = /app-main\.js\?v=(\d+)/.exec(html);
+    if (!m) throw new Error('no version');
+    const latest = m[1], cur = getAppVersion();
+    if (!cur) say('最新は v' + latest + ' です(いま開いている番号は分かりませんでした)。');
+    else if (latest === cur) say('最新です(v' + cur + ')。', true);
+    else say('新しい版があります(最新 v' + latest + '、いま v' + cur + ')。ページを再読み込みしてください(直らないときは、ブラウザの「更新」を長押しして、キャッシュを消す再読み込みをしてください)。', false);
+  } catch (e) {
+    say('確認できませんでした(通信できないか、ファイルから開いている可能性があります)。', false);
+  }
+}
+document.addEventListener('DOMContentLoaded', showAppVersion);
+
 // 表示モード（編集画面／表示画面の切り替え）
 // ==========================================================
 function applyViewModeUI(isView) {
@@ -117,7 +150,38 @@ function applyBarFold(collapsed) {
   if (bar) bar.classList.toggle('bar-collapsed', collapsed);
   const b = document.getElementById('bar-fold-btn');
   if (b) b.textContent = collapsed ? '▼ 開く' : '▲ 閉じる';
+  updateBarSummary();
 }
+
+// 畳んだ固定バーに出す、武装・変異・改造・スキルの使用数/上限（1行）
+function updateBarSummary() {
+  try {
+    const box = document.getElementById('bar-summary');
+    if (!box) return;
+    const num = id => { const e = document.getElementById(id); return e ? (parseInt(e.textContent, 10) || 0) : 0; };
+    const items = [['武装', 'wep', '#ff6b6b'], ['変異', 'mut', '#4dabf7'], ['改造', 'cyb', '#ffd43b']].map(([label, k, color]) => {
+      let used = 0, max = 0;
+      for (let i = 1; i <= 3; i++) { used += num(`used-${k}-lv${i}`); max += num(`max-${k}-lv${i}`); }
+      return { label, color, used, max };
+    });
+    const line = document.getElementById('bar-skill-line');
+    let su = 0, sm = 0;
+    if (line) for (const mt of (line.textContent || '').matchAll(/(\d+)\s*\/\s*(\d+)/g)) { su += +mt[1]; sm += +mt[2]; }
+    items.push({ label: 'スキル', color: '#c9a8f0', used: su, max: sm });
+    box.innerHTML = items.map(it => `<span><span style="color:${it.color};font-weight:bold;">${it.label}</span> <b class="${it.used > it.max ? 'over' : ''}">${it.used}</b>/${it.max}</span>`).join('');
+  } catch (e) { /* 表示できなくても、畳んだバーが少し寂しくなるだけ */ }
+}
+(function watchBarSummary() {
+  document.addEventListener('DOMContentLoaded', () => {
+    try {
+      const bar = document.querySelector('.sticky-top-bar .bar-detail');
+      if (!bar || typeof MutationObserver === 'undefined') return;
+      let t = null;
+      new MutationObserver(() => { clearTimeout(t); t = setTimeout(updateBarSummary, 60); }).observe(bar, { subtree: true, childList: true, characterData: true });
+      updateBarSummary();
+    } catch (e) {}
+  });
+})();
 function toggleBarFold() {
   const collapsed = !document.querySelector('.sticky-top-bar').classList.contains('bar-collapsed');
   applyBarFold(collapsed);
@@ -146,7 +210,12 @@ function cycleFontSize() {
 }
 function initBarAndFont() {
   let fold = false, fs = 'medium';
-  try { fold = localStorage.getItem('necro_bar_fold') === '1'; fs = localStorage.getItem('necro_font_size') || 'medium'; } catch (e) {}
+  try {
+    const saved = localStorage.getItem('necro_bar_fold');
+    // 一度も開閉していない小さな画面(スマホ)では、固定バーが画面を占めすぎるので、初めは畳んでおく（「▼ 開く」で開ける。開閉したら、その選択を覚える）
+    fold = saved === null ? !!(window.matchMedia && window.matchMedia('(max-width: 560px)').matches) : saved === '1';
+    fs = localStorage.getItem('necro_font_size') || 'medium';
+  } catch (e) {}
   applyBarFold(fold);
   applyFontSize(fs);
 }
@@ -419,3 +488,32 @@ function trackFeature(name) {
   window.addEventListener('load', () => setTimeout(upd, 600));
   setTimeout(upd, 100);
 })();
+
+// スマホ：スクロール中・入力中は、固定ボタン(保存/切替/表示/README)を薄くして、表の内容に重ならないようにする
+function initFabDim() {
+  try {
+    const mq = window.matchMedia ? window.matchMedia('(max-width: 899px)') : null;
+    let timer = null;
+    const isField = el => !!(el && el.matches && el.matches('input:not([type=checkbox]):not([type=radio]), textarea, select'));
+    const dim = () => { if (!mq || mq.matches) document.body.classList.add('fab-dim'); };
+    const undimLater = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => { if (!isField(document.activeElement)) document.body.classList.remove('fab-dim'); }, 1200);
+    };
+    window.addEventListener('scroll', () => { dim(); undimLater(); }, { passive: true });
+    document.addEventListener('focusin', e => { if (isField(e.target)) { dim(); clearTimeout(timer); } });
+    document.addEventListener('focusout', () => undimLater());
+  } catch (e) { /* 薄くする機能が使えなくても、通常どおり表示するだけ */ }
+}
+document.addEventListener('DOMContentLoaded', initFabDim);
+
+// スマホ：文字・表・配色のボタンを、「⚙ 表示設定」で開閉する
+function toggleLookTools() {
+  try {
+    const bar = document.querySelector('.bar-tools');
+    const btn = document.getElementById('look-toggle');
+    if (!bar) return;
+    const open = bar.classList.toggle('look-open');
+    if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  } catch (e) { /* 開閉できなくても、他の操作には影響しない */ }
+}
